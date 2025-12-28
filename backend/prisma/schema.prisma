@@ -1,14 +1,81 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  displayName  String   @map("display_name")
+  passwordHash String   @map("password_hash")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Relationships
+  sentFriendRequests     Friendship[] @relation("UserSentRequests")
+  receivedFriendRequests Friendship[] @relation("UserReceivedRequests")
+  sentMessages           Message[]    @relation("MessageSender")
+  receivedMessages       Message[]    @relation("MessageReceiver")
+  queuedMessages         QueuedMessage[]
+
+  @@map("users")
+}
+
+model Friendship {
+  id        String           @id @default(uuid())
+  userId    String           @map("user_id")
+  friendId  String           @map("friend_id")
+  status    FriendshipStatus @default(PENDING)
+  createdAt DateTime         @default(now()) @map("created_at")
+  updatedAt DateTime         @updatedAt @map("updated_at")
+
+  user   User @relation("UserSentRequests", fields: [userId], references: [id], onDelete: Cascade)
+  friend User @relation("UserReceivedRequests", fields: [friendId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, friendId])
+  @@index([userId])
+  @@index([friendId])
+  @@map("friendships")
+}
+
+enum FriendshipStatus {
+  PENDING
+  ACCEPTED
+  BLOCKED
+}
+
+model Message {
+  id         String   @id @default(uuid())
+  fromUserId String   @map("from_user_id")
+  toUserId   String   @map("to_user_id")
+  content    String
+  sentAt     DateTime @default(now()) @map("sent_at")
+  delivered  Boolean  @default(false)
+  read       Boolean  @default(false)
+
+  sender   User @relation("MessageSender", fields: [fromUserId], references: [id], onDelete: Cascade)
+  receiver User @relation("MessageReceiver", fields: [toUserId], references: [id], onDelete: Cascade)
+
+  @@index([fromUserId])
+  @@index([toUserId])
+  @@index([sentAt])
+  @@map("messages")
+}
+
+model QueuedMessage {
+  id            String   @id @default(uuid())
+  userId        String   @map("user_id")
+  recipientId   String   @map("recipient_id")
+  draftContent  String   @map("draft_content")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([recipientId])
+  @@map("queued_messages")
 }
