@@ -1,13 +1,19 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import http from 'http';
 import authRoutes from './routes/auth';
 import { authenticate } from './middleware/auth';
+import { WebSocketService } from './services/websocket';
+import './utils/redis'; // Initialize Redis connection
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// Create HTTP server (needed for WebSocket)
+const server = http.createServer(app);
 
 // Middleware
 app.use(cors());
@@ -32,7 +38,11 @@ app.get('/api/auth/me', authenticate, async (req, res) => {
   });
 });
 
+// Initialize WebSocket server
+const wsService = new WebSocketService(server);
+
 // Start server
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
+  console.log(`🔌 WebSocket server running on ws://localhost:${PORT}/ws`);
 });
