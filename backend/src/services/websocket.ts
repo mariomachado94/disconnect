@@ -65,7 +65,6 @@ export class WebSocketService {
           type: 'connected',
           userId: payload.userId,
         });
-
       } catch (error) {
         console.error('WebSocket auth error:', error);
         ws.close(1008, 'Invalid token');
