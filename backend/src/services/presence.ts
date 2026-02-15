@@ -32,7 +32,7 @@ export class PresenceService {
   static async updateActivity(userId: string): Promise<void> {
     const key = `${PRESENCE_KEY_PREFIX}${userId}`;
     const existing = await redisClient.get(key);
-    
+
     if (existing) {
       const data: PresenceData = JSON.parse(existing);
       data.lastSeen = Date.now();
@@ -51,7 +51,7 @@ export class PresenceService {
   static async getPresence(userId: string): Promise<PresenceData | null> {
     const key = `${PRESENCE_KEY_PREFIX}${userId}`;
     const data = await redisClient.get(key);
-    
+
     if (!data) {
       return {
         userId,
@@ -82,14 +82,14 @@ export class PresenceService {
   // Get presence for multiple users
   static async getMultiplePresence(userIds: string[]): Promise<Map<string, PresenceData>> {
     const presenceMap = new Map<string, PresenceData>();
-    
+
     for (const userId of userIds) {
       const presence = await this.getPresence(userId);
       if (presence) {
         presenceMap.set(userId, presence);
       }
     }
-    
+
     return presenceMap;
   }
 
@@ -106,6 +106,15 @@ export class PresenceService {
           await redisClient.del(key);
         }
       }
+    }
+  }
+
+  // Clear all presence data
+  static async clearAll(): Promise<void> {
+    const keys = await redisClient.keys(`${PRESENCE_KEY_PREFIX}*`);
+    if (keys.length > 0) {
+      await redisClient.del(keys);
+      console.log(`🧹 Cleared ${keys.length} presence keys`);
     }
   }
 }

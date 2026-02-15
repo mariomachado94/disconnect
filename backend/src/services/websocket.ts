@@ -14,6 +14,10 @@ export class WebSocketService {
 
   constructor(server: Server) {
     this.wss = new WebSocketServer({ server, path: '/ws' });
+
+    // Clear all presence on startup (server restart = everyone offline)
+    PresenceService.clearAll();
+
     this.initialize();
   }
 
