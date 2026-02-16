@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import http from 'http';
 import authRoutes from './routes/auth';
+import friendsRoutes from './routes/friends';
 import { authenticate } from './middleware/auth';
 import { WebSocketService } from './services/websocket';
 import './utils/redis'; // Initialize Redis connection
@@ -26,6 +27,9 @@ app.get('/health', (req, res) => {
 
 // Auth routes (public)
 app.use('/api/auth', authRoutes);
+
+// Friends routes (protected)
+app.use('/api/friends', friendsRoutes);
 
 // Protected route example
 app.get('/api/auth/me', authenticate, async (req, res) => {

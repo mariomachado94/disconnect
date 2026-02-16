@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import { body, validationResult } from 'express-validator';
 import bcrypt from 'bcrypt';
 import { prisma } from '../utils/prisma';
@@ -14,7 +14,7 @@ router.post(
     body('password').isLength({ min: 8 }),
     body('displayName').trim().isLength({ min: 1, max: 50 }),
   ],
-  async (req, res) => {
+  async (req: Request, res: Response) => {
     try {
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
@@ -68,11 +68,8 @@ router.post(
 // Login
 router.post(
   '/login',
-  [
-    body('email').isEmail().normalizeEmail(),
-    body('password').notEmpty(),
-  ],
-  async (req, res) => {
+  [body('email').isEmail().normalizeEmail(), body('password').notEmpty()],
+  async (req: Request, res: Response) => {
     try {
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
