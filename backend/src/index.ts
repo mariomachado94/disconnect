@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import http from 'http';
 import authRoutes from './routes/auth';
 import friendsRoutes from './routes/friends';
+import messagesRoutes from './routes/messages';
 import { authenticate } from './middleware/auth';
 import { WebSocketService } from './services/websocket';
 import './utils/redis'; // Initialize Redis connection
@@ -30,6 +31,9 @@ app.use('/api/auth', authRoutes);
 
 // Friends routes (protected)
 app.use('/api/friends', friendsRoutes);
+
+// Messages routes (protected)
+app.use('/api/messages', messagesRoutes);
 
 // Protected route example
 app.get('/api/auth/me', authenticate, async (req, res) => {

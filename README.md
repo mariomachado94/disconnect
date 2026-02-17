@@ -153,6 +153,34 @@ curl -X POST http://localhost:3001/api/friends/accept/FRIENDSHIP_ID \
 curl http://localhost:3001/api/friends \
   -H "Authorization: Bearer ALICE_TOKEN"
 ```
+### Messages
+- `POST /api/messages/send` - Send message (recipient must be online)
+- `GET /api/messages/conversation/:friendId` - Get conversation history
+- `POST /api/messages/read/:friendId` - Mark messages as read
+
+### Testing Messages
+```bash
+# Terminal 1: Alice connects via WebSocket
+wscat -c "ws://localhost:3001/ws?token=ALICE_TOKEN"
+
+# Terminal 2: Bob connects via WebSocket
+wscat -c "ws://localhost:3001/ws?token=BOB_TOKEN"
+
+# Alice should see Bob's presence_change notification (online)
+# Bob should see Alice's presence_change notification (online)
+
+# In Alice's wscat terminal, send a message to Bob:
+{"type":"message","recipientId":"BOB_USER_ID","content":"Hey Bob!"}
+
+# Bob should immediately receive:
+# {"type":"message_received","message":{...}}
+
+# Alice should receive:
+# {"type":"message_sent","message":{...}}
+
+# Test offline blocking - disconnect Bob, then try to message him:
+# Alice should receive: {"type":"message_failed","reason":"offline",...}
+```
 
 ## Environment Variables
 
