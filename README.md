@@ -113,6 +113,46 @@ curl -X POST http://localhost:3001/api/auth/login \
 curl http://localhost:3001/api/auth/me \
   -H "Authorization: Bearer YOUR_TOKEN_HERE"
 ```
+### Friends
+- `POST /api/friends/request` - Send friend request by email
+- `POST /api/friends/accept/:friendshipId` - Accept a friend request
+- `POST /api/friends/reject/:friendshipId` - Reject a friend request
+- `GET /api/friends` - Get all friends with presence status
+- `GET /api/friends/requests/pending` - Get incoming pending requests
+- `DELETE /api/friends/:friendId` - Remove a friend
+
+### Testing Friends
+```bash
+# Terminal 1: Create two users 
+curl -X POST http://localhost:3001/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email":"alice@example.com","password":"password123","displayName":"Alice"}' 
+
+curl -X POST http://localhost:3001/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email":"bob@example.com","password":"password123","displayName":"Bob"}' 
+
+# Save Alice's token as ALICE_TOKEN
+# Save Bob's token as BOB_TOKEN 
+
+# Alice sends friend request to Bob
+curl -X POST http://localhost:3001/api/friends/request \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer ALICE_TOKEN" \
+  -d '{"email":"bob@example.com"}'
+
+# Bob checks pending requests
+curl http://localhost:3001/api/friends/requests/pending \
+  -H "Authorization: Bearer BOB_TOKEN"
+
+# Bob accepts (use the friendship ID from the response above)
+curl -X POST http://localhost:3001/api/friends/accept/FRIENDSHIP_ID \
+  -H "Authorization: Bearer BOB_TOKEN"
+
+# Alice gets her friends list (should show Bob as offline)
+curl http://localhost:3001/api/friends \
+  -H "Authorization: Bearer ALICE_TOKEN"
+```
 
 ## Environment Variables
 
