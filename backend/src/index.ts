@@ -7,6 +7,7 @@ import friendsRoutes from './routes/friends';
 import messagesRoutes from './routes/messages';
 import { authenticate } from './middleware/auth';
 import { WebSocketService } from './services/websocket';
+import { setWsInstance } from './services/wsInstance';
 import './utils/redis'; // Initialize Redis connection
 
 dotenv.config();
@@ -48,6 +49,7 @@ app.get('/api/auth/me', authenticate, async (req, res) => {
 
 // Initialize WebSocket server
 const wsService = new WebSocketService(server);
+setWsInstance(wsService);
 
 // Start server
 server.listen(PORT, () => {

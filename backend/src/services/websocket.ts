@@ -225,6 +225,11 @@ export class WebSocketService {
   // Called when a WebSocket connection closes (clean or unclean)
   private async handleDisconnect(ws: AuthenticatedWebSocket) {
     if (ws.userId) {
+      // Only clean up presence if this is still the active connection for this user.
+      // A newer connection may have already replaced it in the map (e.g. reconnect),
+      // in which case we should leave presence alone.
+      if (this.connections.get(ws.userId) !== ws) return;
+
       console.log(`User ${ws.userId} disconnected`);
       this.connections.delete(ws.userId);
 

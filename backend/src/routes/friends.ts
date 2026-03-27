@@ -3,6 +3,7 @@ import { body, validationResult } from 'express-validator';
 import { authenticate } from '../middleware/auth';
 import { prisma } from '../utils/prisma';
 import { PresenceService } from '../services/presence';
+import { getWsInstance } from '../services/wsInstance';
 
 const router = Router();
 
@@ -77,6 +78,18 @@ router.post(
         },
       });
 
+      // Notify the recipient in real-time that they have a new friend request
+      const wsService = getWsInstance();
+      if (wsService) {
+        wsService.sendToUser(targetUser.id, {
+          type: 'friend_request_received',
+          from: {
+            id: req.user!.id,
+            displayName: req.user!.displayName,
+          },
+        });
+      }
+
       res.status(201).json({
         message: 'Friend request sent',
         friendship: {
@@ -116,20 +129,38 @@ router.post('/accept/:friendshipId', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Friend request is not pending' });
     }
 
-    // Update to accepted
+    // Update to accepted, including both sides:
+    // - user  → the original requester (Mario) — used in the REST response to Bob
+    // - friend → the accepter (Bob)            — used in the WS notification to Mario
     const updatedFriendship = await prisma.friendship.update({
       where: { id: friendshipId },
       data: { status: 'ACCEPTED' },
       include: {
         user: {
-          select: {
-            id: true,
-            email: true,
-            displayName: true,
-          },
+          select: { id: true, email: true, displayName: true },
+        },
+        friend: {
+          select: { id: true, email: true, displayName: true },
         },
       },
     });
+
+    // Notify the original requester in real-time that their request was accepted.
+    // Include the accepter's current presence so their contact list updates immediately.
+    const wsService = getWsInstance();
+    if (wsService) {
+      const accepterPresence = await PresenceService.getPresence(currentUserId);
+      wsService.sendToUser(friendship.userId, {
+        type: 'friend_accepted',
+        friend: {
+          id: updatedFriendship.friend.id,
+          email: updatedFriendship.friend.email,
+          displayName: updatedFriendship.friend.displayName,
+          status: accepterPresence?.status || 'offline',
+          lastSeen: accepterPresence?.lastSeen || 0,
+        },
+      });
+    }
 
     res.json({
       message: 'Friend request accepted',
