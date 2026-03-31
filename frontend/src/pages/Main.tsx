@@ -46,6 +46,10 @@ export default function Main() {
     setUnreadIds(prev => { const next = new Set(prev); next.delete(friend.id); return next })
   }
 
+  function handleMinimize() {
+    setActiveTabId(null)
+  }
+
   function handleCloseTab(id: string) {
     setOpenTabIds(prev => prev.filter(tabId => tabId !== id))
     setUnreadIds(prev => { const next = new Set(prev); next.delete(id); return next })
@@ -78,6 +82,7 @@ export default function Main() {
           <ChatWindow
             key={activeFriend.id}
             friend={activeFriend}
+            onMinimize={handleMinimize}
             onClose={() => handleCloseTab(activeFriend.id)}
           />
         </div>

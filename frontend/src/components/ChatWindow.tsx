@@ -6,10 +6,11 @@ import { useWS } from '../contexts/WSContext'
 
 interface Props {
   friend: Friend
+  onMinimize: () => void
   onClose: () => void
 }
 
-export default function ChatWindow({ friend, onClose }: Props) {
+export default function ChatWindow({ friend, onMinimize, onClose }: Props) {
   const { token, user } = useAuth()
   const { messages, seedConversation, sendMessage, lastFailedRecipient } = useWS()
   const [input, setInput] = useState('')
@@ -50,13 +51,22 @@ export default function ChatWindow({ friend, onClose }: Props) {
         <div className={`w-2 h-2 rounded-full ${friend.status === 'online' ? 'bg-green-500' : friend.status === 'away' ? 'bg-yellow-400' : 'bg-gray-300'}`} />
         <span className="text-sm font-semibold text-gray-800">{friend.displayName}</span>
         <span className="text-xs text-gray-400 capitalize">{friend.status}</span>
-        <button
-          onClick={onClose}
-          className="ml-auto text-gray-400 hover:text-gray-600 text-lg leading-none cursor-pointer"
-          aria-label="Close chat"
-        >
-          ×
-        </button>
+        <div className="ml-auto flex items-center gap-1">
+          <button
+            onClick={onMinimize}
+            className="text-gray-400 hover:text-gray-600 text-lg leading-none cursor-pointer"
+            aria-label="Minimize chat"
+          >
+            −
+          </button>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 text-lg leading-none cursor-pointer"
+            aria-label="Close chat"
+          >
+            ×
+          </button>
+        </div>
       </div>
 
       {/* Messages */}
