@@ -54,7 +54,7 @@ export default function ContactList({ selectedFriendId, onSelectFriend, fullscre
   const offline = friends.filter(f => f.status === 'offline')
 
   return (
-    <div className={`flex flex-col h-full bg-gray-50 border-r border-gray-200 ${fullscreen ? 'w-full' : 'w-52 shrink-0'}`}>
+    <div className={`flex flex-col h-full bg-gray-50 border-r border-gray-200 ${fullscreen ? 'flex-1' : 'w-52 shrink-0'}`}>
       {/* Header */}
       <div className="px-3 py-2 border-b border-gray-200 bg-white">
         <p className="text-xs font-bold text-gray-700 truncate">{user?.displayName}</p>

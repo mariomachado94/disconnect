@@ -49,8 +49,8 @@ No automated tests yet — keeping iteration speed high. Backend endpoints are m
 - **`contexts/WSContext.tsx`** — Central WS state: friends, messages, presence, pending friend requests, connection lifecycle
 - **`lib/api.ts`** — REST client; all response shapes are unwrapped before returning (see API Shapes)
 - **`types/index.ts`** — Shared TypeScript types including the `WSMessage` discriminated union
-- **`pages/`** — Login, Register, Main (two-panel layout)
-- **`components/`** — ContactList, ChatWindow, AddFriendModal, PendingRequests
+- **`pages/`** — Login, Register, Main (three-panel layout when chat open, expanded contact list otherwise)
+- **`components/`** — ContactList, TabStrip, ChatWindow, AddFriendModal, PendingRequests
 
 ### Provider tree
 ```
@@ -104,4 +104,22 @@ These are easily confused. Always double-check which side you need when querying
 
 **ContactItem defined outside ContactList:** Moving it inside causes React to remount all contact items on every parent re-render (e.g. every presence update). Keep it outside.
 
-**ChatWindow keyed by friend ID:** `<ChatWindow key={selectedFriend.id} />` in Main.tsx — ensures the component fully remounts when switching conversations.
+**ChatWindow keyed by friend ID:** `<ChatWindow key={activeFriend.id} />` in Main.tsx — ensures the component fully remounts (resets scroll, input, history fetch) when switching conversations.
+
+## Frontend Layout: Tabbed Chat
+
+`Main.tsx` manages two pieces of state: `openTabIds: string[]` (which chats are open, in order) and `activeTabId: string | null` (which is currently focused). The layout has three states:
+
+| State | ContactList | TabStrip | ChatWindow |
+|---|---|---|---|
+| No open tabs | `flex-1` — fills screen | hidden | hidden |
+| Tabs open, none active | `flex-1` — fills remaining space | visible | hidden |
+| Tabs open, one active | `w-52` sidebar | visible | `flex-1` |
+
+`ContactList` receives `fullscreen={activeTabId === null}` — it expands whenever no chat is active, regardless of whether tabs exist. `TabStrip` (`components/TabStrip.tsx`) renders `null` when `openTabIds` is empty.
+
+**Closing a tab always sets `activeTabId` to `null`** — the user must explicitly click a tab to reopen a chat. No auto-selection of the next tab.
+
+**Opening a chat** (clicking a contact) adds it to `openTabIds` if not already present, then sets it as active. Clicking a contact whose tab is already open just switches to it without duplicating.
+
+**Tab strip** sits between ContactList and ChatWindow — a 40px wide vertical column of square boxes showing contact initials. Active tab has a left blue border + white background. Close button (×) appears on hover.
