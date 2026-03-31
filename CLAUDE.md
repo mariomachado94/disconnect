@@ -123,3 +123,9 @@ These are easily confused. Always double-check which side you need when querying
 **Opening a chat** (clicking a contact) adds it to `openTabIds` if not already present, then sets it as active. Clicking a contact whose tab is already open just switches to it without duplicating.
 
 **Tab strip** sits between ContactList and ChatWindow — a 40px wide vertical column of square boxes showing contact initials. Active tab has a left blue border + white background. Close button (×) appears on hover.
+
+**Unread tab state:** `unreadIds: Set<string>` lives in `Main.tsx`. When a `message_received` WS event arrives for a sender who is not the active chat, their tab is opened (if not already), marked unread, and a notification sound plays. Unread tabs render with an amber background + small amber dot. The unread state clears when the user switches to, opens from the contact list, or closes that tab.
+
+**`lastIncoming` in WSContext:** Set on every `message_received` event. `Main.tsx` watches it with a `useEffect` to drive tab-open and unread logic. An `activeTabIdRef` (kept in sync via a separate effect) lets the incoming-message effect read the current active tab without adding `activeTabId` as a dependency — otherwise the effect would re-run on every tab switch, not just on new messages.
+
+**Notification sound:** `lib/sound.ts` generates a two-tone sine wave (660 Hz → 880 Hz) via Web Audio API. No audio asset required.

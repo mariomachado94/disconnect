@@ -10,6 +10,7 @@ interface WSContextValue {
   seedConversation: (friendId: string, history: Message[]) => void
   sendMessage: (recipientId: string, content: string) => void
   lastFailedRecipient: string | null
+  lastIncoming: Message | null
   isConnected: boolean
   pendingCount: number
   setPendingCount: React.Dispatch<React.SetStateAction<number>>
@@ -26,6 +27,7 @@ export function WSProvider({ children }: { children: ReactNode }) {
   const [friends, setFriends] = useState<Friend[]>([])
   const [messages, setMessages] = useState<Record<string, Message[]>>({})
   const [lastFailedRecipient, setLastFailedRecipient] = useState<string | null>(null)
+  const [lastIncoming, setLastIncoming] = useState<Message | null>(null)
   const [isConnected, setIsConnected] = useState(false)
   const [pendingCount, setPendingCount] = useState(0)
   const [pendingSeen, setPendingSeen] = useState(false)
@@ -71,6 +73,7 @@ export function WSProvider({ children }: { children: ReactNode }) {
 
       if (msg.type === 'message_received') {
         addMessage(msg.message.fromUserId, msg.message)
+        setLastIncoming(msg.message)
       } else if (msg.type === 'message_sent') {
         addMessage(msg.message.toUserId, msg.message)
       } else if (msg.type === 'message_failed') {
@@ -124,7 +127,7 @@ export function WSProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <WSContext.Provider value={{ friends, setFriends, messages, seedConversation, sendMessage, lastFailedRecipient, isConnected, pendingCount, setPendingCount, pendingSeen, setPendingSeen }}>
+    <WSContext.Provider value={{ friends, setFriends, messages, seedConversation, sendMessage, lastFailedRecipient, lastIncoming, isConnected, pendingCount, setPendingCount, pendingSeen, setPendingSeen }}>
       {children}
     </WSContext.Provider>
   )
