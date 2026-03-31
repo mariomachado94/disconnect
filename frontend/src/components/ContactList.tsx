@@ -9,6 +9,7 @@ import PendingRequests from './PendingRequests'
 interface Props {
   selectedFriendId: string | null
   onSelectFriend: (friend: Friend) => void
+  fullscreen?: boolean
 }
 
 function statusDot(status: Friend['status']) {
@@ -35,7 +36,7 @@ function ContactItem({ friend, isSelected, onSelect }: ContactItemProps) {
   )
 }
 
-export default function ContactList({ selectedFriendId, onSelectFriend }: Props) {
+export default function ContactList({ selectedFriendId, onSelectFriend, fullscreen }: Props) {
   const { token, user, logout } = useAuth()
   const { friends, setFriends, pendingCount, setPendingCount, pendingSeen, setPendingSeen } = useWS()
   const [onlineExpanded, setOnlineExpanded] = useState(true)
@@ -53,7 +54,7 @@ export default function ContactList({ selectedFriendId, onSelectFriend }: Props)
   const offline = friends.filter(f => f.status === 'offline')
 
   return (
-    <div className="flex flex-col h-full bg-gray-50 border-r border-gray-200 w-52 shrink-0">
+    <div className={`flex flex-col h-full bg-gray-50 border-r border-gray-200 ${fullscreen ? 'w-full' : 'w-52 shrink-0'}`}>
       {/* Header */}
       <div className="px-3 py-2 border-b border-gray-200 bg-white">
         <p className="text-xs font-bold text-gray-700 truncate">{user?.displayName}</p>

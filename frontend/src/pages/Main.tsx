@@ -14,22 +14,23 @@ export default function Main() {
     setSelectedFriendId(friend.id)
   }
 
+  function handleCloseChat() {
+    setSelectedFriendId(null)
+  }
+
   return (
     <div className="flex h-screen bg-white overflow-hidden">
       <ContactList
         selectedFriendId={selectedFriendId}
         onSelectFriend={handleSelectFriend}
+        fullscreen={!selectedFriend}
       />
 
-      <div className="flex-1 flex flex-col">
-        {selectedFriend ? (
-          <ChatWindow key={selectedFriend.id} friend={selectedFriend} />
-        ) : (
-          <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">
-            Select a friend to start chatting
-          </div>
-        )}
-      </div>
+      {selectedFriend && (
+        <div className="flex-1 flex flex-col">
+          <ChatWindow key={selectedFriend.id} friend={selectedFriend} onClose={handleCloseChat} />
+        </div>
+      )}
     </div>
   )
 }
