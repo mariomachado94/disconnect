@@ -23,7 +23,7 @@ const WSContext = createContext<WSContextValue | null>(null)
 const WS_URL = import.meta.env.VITE_WS_URL
 
 export function WSProvider({ children }: { children: ReactNode }) {
-  const { token } = useAuth()
+  const { token, logout } = useAuth()
   const [friends, setFriends] = useState<Friend[]>([])
   const [messages, setMessages] = useState<Record<string, Message[]>>({})
   const [lastFailedRecipient, setLastFailedRecipient] = useState<string | null>(null)
@@ -33,6 +33,23 @@ export function WSProvider({ children }: { children: ReactNode }) {
   const [pendingSeen, setPendingSeen] = useState(false)
   const wsRef = useRef<WebSocket | null>(null)
   const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const lastActivityRef = useRef<number>(Date.now())
+
+  // Track real user activity so the heartbeat only fires when the user is
+  // actually interacting with the app, not just on a timer. Without this, the
+  // heartbeat would keep resetting lastSeen even when the user walked away,
+  // making the away/offline transitions never trigger.
+  useEffect(() => {
+    const markActive = () => { lastActivityRef.current = Date.now() }
+    window.addEventListener('mousemove', markActive)
+    window.addEventListener('keydown', markActive)
+    window.addEventListener('click', markActive)
+    return () => {
+      window.removeEventListener('mousemove', markActive)
+      window.removeEventListener('keydown', markActive)
+      window.removeEventListener('click', markActive)
+    }
+  }, [])
 
   const addMessage = useCallback((friendId: string, message: Message) => {
     setMessages(prev => ({
@@ -55,10 +72,14 @@ export function WSProvider({ children }: { children: ReactNode }) {
       }
       setIsConnected(true)
       heartbeatRef.current = setInterval(() => {
-        if (ws.readyState === WebSocket.OPEN) {
+        if (ws.readyState !== WebSocket.OPEN) return
+        // Only report activity if the user has interacted in the last 15s.
+        // If they haven't, skip — the backend will transition them to away/offline.
+        const idleMs = Date.now() - lastActivityRef.current
+        if (idleMs < 15_000) {
           ws.send(JSON.stringify({ type: 'heartbeat' }))
         }
-      }, 30_000)
+      }, 15_000)
     }
 
     ws.onclose = () => {
@@ -89,6 +110,9 @@ export function WSProvider({ children }: { children: ReactNode }) {
       } else if (msg.type === 'friend_request_received') {
         setPendingCount(prev => prev + 1)
         setPendingSeen(false)
+      } else if (msg.type === 'force_logout') {
+        // Server determined we've been inactive too long — clear the session.
+        logout()
       }
     }
 

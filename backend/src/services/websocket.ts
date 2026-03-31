@@ -8,6 +8,7 @@ import { prisma } from '../utils/prisma';
 interface AuthenticatedWebSocket extends WebSocket {
   userId?: string;
   isAlive?: boolean;
+  presenceStatus?: PresenceStatus; // last state we notified friends about
 }
 
 export class WebSocketService {
@@ -29,7 +30,14 @@ export class WebSocketService {
     // If the server restarted, all WebSocket connections were dropped,
     // meaning no one is connected. Clear stale Redis presence keys
     // so users don't appear online when they're not.
-    await PresenceService.clearAll();
+    try {
+      await PresenceService.clearAll();
+    } catch (err) {
+      // Redis may not be ready yet or unavailable. Log and continue —
+      // stale presence keys are cosmetic; failing here would crash the
+      // process and break HTTP routes that don't touch Redis at all.
+      console.error('Failed to clear presence on startup:', err);
+    }
 
     // Now initialize WebSocket handlers
     this.initialize();
@@ -53,6 +61,7 @@ export class WebSocketService {
         const payload = verifyToken(token);
         ws.userId = payload.userId;
         ws.isAlive = true;
+        ws.presenceStatus = PresenceStatus.ONLINE;
 
         // Store connection for this user
         this.connections.set(payload.userId, ws);
@@ -98,6 +107,10 @@ export class WebSocketService {
     // that didn't send a clean WebSocket close frame.
     this.startHeartbeat();
 
+    // Actively poll connected users for inactivity transitions.
+    // This is what drives away/offline state changes and force-logout.
+    this.startPresenceMonitor();
+
     // Periodically clean up stale Redis presence keys.
     // Acts as a safety net for edge cases where handleDisconnect
     // didn't run (e.g. server crash).
@@ -122,6 +135,12 @@ export class WebSocketService {
           // - Activity heartbeat: tracks user activity for away/auto-logout
           if (ws.userId) {
             await PresenceService.updateActivity(ws.userId);
+            // If the presence monitor had already moved them to AWAY, coming
+            // back with activity means they're ONLINE again — notify friends.
+            if (ws.presenceStatus === PresenceStatus.AWAY) {
+              ws.presenceStatus = PresenceStatus.ONLINE;
+              await this.notifyFriendsPresenceChange(ws.userId, PresenceStatus.ONLINE);
+            }
           }
           this.send(ws, { type: 'heartbeat_ack' });
           break;
@@ -305,6 +324,45 @@ export class WebSocketService {
     this.wss.on('close', () => {
       clearInterval(interval);
     });
+  }
+
+  // Actively monitors all connected users for inactivity.
+  // Runs every 10 seconds and transitions users through online → away → offline.
+  // When offline threshold is crossed:
+  //   - sends a force_logout message to the client
+  //   - closes the WebSocket connection
+  //   - notifies the user's friends
+  // When away threshold is crossed:
+  //   - notifies friends (status_change: away)
+  // Avoids duplicate notifications by tracking presenceStatus per connection.
+  private startPresenceMonitor() {
+    const interval = setInterval(async () => {
+      for (const [userId, ws] of this.connections) {
+        const presence = await PresenceService.getPresence(userId);
+        const newStatus = presence?.status ?? PresenceStatus.OFFLINE;
+        const prevStatus = ws.presenceStatus ?? PresenceStatus.ONLINE;
+
+        if (newStatus === prevStatus) continue;
+
+        ws.presenceStatus = newStatus;
+
+        if (newStatus === PresenceStatus.OFFLINE) {
+          console.log(`User ${userId} exceeded inactivity limit — forcing logout`);
+          // Tell the client to sign out before we close the socket
+          this.send(ws, { type: 'force_logout', reason: 'inactivity' });
+          // Remove from connections first so handleDisconnect won't double-fire
+          this.connections.delete(userId);
+          ws.close();
+          // Presence is already cleared by getPresence(); notify friends
+          await this.notifyFriendsPresenceChange(userId, PresenceStatus.OFFLINE);
+        } else if (newStatus === PresenceStatus.AWAY) {
+          console.log(`User ${userId} is now away`);
+          await this.notifyFriendsPresenceChange(userId, PresenceStatus.AWAY);
+        }
+      }
+    }, 10_000); // check every 10 seconds
+
+    this.wss.on('close', () => clearInterval(interval));
   }
 
   // Public method to send a message to a specific user by ID.

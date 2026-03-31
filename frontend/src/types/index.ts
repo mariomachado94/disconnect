@@ -41,3 +41,4 @@ export type WSMessage =
   | { type: 'friend_accepted'; friend: Friend }
   | { type: 'friend_request_received'; from: { id: string; displayName: string } }
   | { type: 'heartbeat_ack' }
+  | { type: 'force_logout'; reason: string }

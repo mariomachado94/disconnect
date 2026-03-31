@@ -13,8 +13,8 @@ export interface PresenceData {
 }
 
 const PRESENCE_KEY_PREFIX = 'presence:';
-const AWAY_TIMEOUT = 5 * 60 * 1000; // 5 minutes
-const LOGOUT_TIMEOUT = 15 * 60 * 1000; // 15 minutes
+const AWAY_TIMEOUT = 30 * 1000; // 30 seconds (testing)
+const LOGOUT_TIMEOUT = 90 * 1000; // 90 seconds (testing)
 
 export class PresenceService {
   // Set user online
