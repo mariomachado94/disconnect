@@ -49,6 +49,7 @@ Bad candidates: anything derivable by reading the code, git history, or existing
 - **`services/websocket.ts`** — WebSocketService class, manages `userId → WebSocket` map, heartbeats, message routing
 - **`services/wsInstance.ts`** — Singleton getter/setter so route handlers can call `sendToUser` without circular deps
 - **`services/presence.ts`** — Redis-backed presence (online/away/offline computed from `lastSeen` timestamp)
+- **`services/tokenBlocklist.ts`** — Redis-backed JWT blocklist with auto-expiring TTL; used by auth middleware and WS connect
 - **`prisma/schema.prisma`** — PostgreSQL schema via Prisma ORM
 
 ### Frontend (`frontend/src/`)
@@ -109,12 +110,16 @@ These are easily confused. Always double-check which side you need when querying
 
 **Active presence monitoring — `startPresenceMonitor()`:** Called once from `initialize()`. Runs a `setInterval` every 10 seconds that iterates all live connections, calls `PresenceService.getPresence(userId)` to read the computed status from Redis, and compares it to `ws.presenceStatus` (the last state friends were notified about). If the status changed, it fires the appropriate transition:
 - `ONLINE → AWAY`: logs, notifies friends via `notifyFriendsPresenceChange`.
-- `AWAY → OFFLINE` (or `ONLINE → OFFLINE`): sends `{ type: 'force_logout', reason: 'inactivity' }` to the client, removes the connection from the map (so `handleDisconnect` won't double-fire), closes the socket, then notifies friends.
+- `AWAY → OFFLINE` (or `ONLINE → OFFLINE`): sends `{ type: 'force_logout', reason: 'inactivity' }` to the client, removes the connection from the map (so `handleDisconnect` won't double-fire), **blocklists the token immediately** (no grace period — user was already idle), closes the socket, then notifies friends.
 The `presenceStatus` field on `AuthenticatedWebSocket` is initialized to `ONLINE` on connect and kept in sync by the monitor and the heartbeat handler — it exists solely to suppress duplicate broadcasts when nothing has changed.
 
 **Heartbeat restores AWAY → ONLINE:** When the heartbeat handler receives a `heartbeat` from the client, it updates `lastSeen` in Redis. If `ws.presenceStatus` is currently `AWAY`, it immediately resets it to `ONLINE` and fires `notifyFriendsPresenceChange` — so a user who wakes up from idle snaps back to online without waiting for the next monitor tick.
 
 **Activity-aware heartbeat (frontend):** WSContext tracks real user activity (`mousemove`, `keydown`, `click`) via `lastActivityRef`. The heartbeat interval fires every 15 s but only sends a heartbeat to the server if the user was active in the last 15 s. If the user is idle, the heartbeat is skipped — allowing the backend's presence monitor to detect inactivity and transition the user to away/offline. Without this, the heartbeat alone would keep resetting `lastSeen` and the away/offline states would never trigger.
+
+**Disconnect-based token blocklist:** When a user's WebSocket disconnects, `handleDisconnect` starts a 90-second timer (same threshold as inactivity force-logout). If the user reconnects within 90s, the timer is cancelled in the connection handler. If not, the JWT is added to a Redis blocklist (`TokenBlocklist.blocklist()`) with a TTL equal to the token's remaining lifetime. The auth middleware and WS connection handler both check `TokenBlocklist.isBlocklisted()` — a blocklisted token returns 401 / closes the socket. This means closing the browser for >90s requires re-login. Network blips and page refreshes (sub-second reconnects) are unaffected. The `disconnectTimers` map is in-memory; lost on server restart, which is acceptable since all WS connections are also dropped.
+
+**JWT expiry is 1 day** (not 7). With the 90s disconnect/inactivity force-logout, a 7-day token was oversized. 1 day limits blocklist storage and reduces exposure if a token is stolen. Blocklist TTL is derived from the token's `exp` claim, so entries self-clean.
 
 **`force_logout` handling (frontend):** WSContext handles `{ type: 'force_logout' }` by calling `logout()` from AuthContext, which clears the JWT and redirects to login. This is the only server-initiated session termination path.
 

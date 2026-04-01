@@ -2,11 +2,13 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { Server } from 'http';
 import { verifyToken } from '../utils/jwt';
 import { PresenceService, PresenceStatus } from './presence';
+import { TokenBlocklist } from './tokenBlocklist';
 import { prisma } from '../utils/prisma';
 
 // Extend the base WebSocket type to include our custom properties
 interface AuthenticatedWebSocket extends WebSocket {
   userId?: string;
+  token?: string;
   isAlive?: boolean;
   presenceStatus?: PresenceStatus; // last state we notified friends about
 }
@@ -15,6 +17,9 @@ export class WebSocketService {
   private wss: WebSocketServer;
   // Map of userId -> WebSocket connection for fast lookups
   private connections: Map<string, AuthenticatedWebSocket> = new Map();
+  // Pending disconnect timers — if the user doesn't reconnect within 90s,
+  // their token is blocklisted. Cancelled on reconnect.
+  private disconnectTimers: Map<string, NodeJS.Timeout> = new Map();
 
   constructor(server: Server) {
     this.wss = new WebSocketServer({ server, path: '/ws' });
@@ -44,7 +49,7 @@ export class WebSocketService {
   }
 
   private initialize() {
-    this.wss.on('connection', (ws: AuthenticatedWebSocket, req) => {
+    this.wss.on('connection', async (ws: AuthenticatedWebSocket, req) => {
       console.log('New WebSocket connection attempt');
 
       // Extract token from query params (?token=...)
@@ -59,9 +64,26 @@ export class WebSocketService {
 
       try {
         const payload = verifyToken(token);
+
+        // Reject blocklisted tokens (e.g. after disconnect timeout)
+        const blocked = await TokenBlocklist.isBlocklisted(token);
+        if (blocked) {
+          ws.close(1008, 'Token revoked');
+          return;
+        }
+
         ws.userId = payload.userId;
+        ws.token = token;
         ws.isAlive = true;
         ws.presenceStatus = PresenceStatus.ONLINE;
+
+        // Cancel any pending disconnect timer — user reconnected in time
+        const pendingTimer = this.disconnectTimers.get(payload.userId);
+        if (pendingTimer) {
+          clearTimeout(pendingTimer);
+          this.disconnectTimers.delete(payload.userId);
+          console.log(`Cancelled disconnect timer for user ${payload.userId} (reconnected)`);
+        }
 
         // Store connection for this user
         this.connections.set(payload.userId, ws);
@@ -257,6 +279,20 @@ export class WebSocketService {
 
       // Notify friends this user went offline
       await this.notifyFriendsPresenceChange(ws.userId, PresenceStatus.OFFLINE);
+
+      // Start a 90s timer — if the user doesn't reconnect, blocklist their token.
+      // This enforces "online means present": closing the browser for more than
+      // 90s means you need to log in again.
+      if (ws.token) {
+        const userId = ws.userId;
+        const token = ws.token;
+        const timer = setTimeout(async () => {
+          this.disconnectTimers.delete(userId);
+          await TokenBlocklist.blocklist(token);
+          console.log(`Token blocklisted for user ${userId} (disconnect timeout)`);
+        }, 90_000);
+        this.disconnectTimers.set(userId, timer);
+      }
     }
   }
 
@@ -352,6 +388,17 @@ export class WebSocketService {
           this.send(ws, { type: 'force_logout', reason: 'inactivity' });
           // Remove from connections first so handleDisconnect won't double-fire
           this.connections.delete(userId);
+          // Blocklist token immediately — user was already idle 90s while connected,
+          // no additional grace period needed
+          if (ws.token) {
+            await TokenBlocklist.blocklist(ws.token);
+          }
+          // Cancel any pending disconnect timer (defensive cleanup)
+          const timer = this.disconnectTimers.get(userId);
+          if (timer) {
+            clearTimeout(timer);
+            this.disconnectTimers.delete(userId);
+          }
           ws.close();
           // Presence is already cleared by getPresence(); notify friends
           await this.notifyFriendsPresenceChange(userId, PresenceStatus.OFFLINE);
