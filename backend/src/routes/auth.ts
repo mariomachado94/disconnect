@@ -56,6 +56,7 @@ router.post(
           id: user.id,
           email: user.email,
           displayName: user.displayName,
+          avatarUrl: user.avatarUrl,
         },
       });
     } catch (error) {
@@ -106,6 +107,7 @@ router.post(
           id: user.id,
           email: user.email,
           displayName: user.displayName,
+          avatarUrl: user.avatarUrl,
         },
       });
     } catch (error) {

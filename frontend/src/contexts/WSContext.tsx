@@ -119,7 +119,7 @@ export function WSProvider({ children }: { children: ReactNode }) {
         // Always update friends list so the contact list shows current status
         setFriends(prev =>
           prev.map(f =>
-            f.id === msg.user.id ? { ...f, status: msg.status } : f
+            f.id === msg.user.id ? { ...f, status: msg.status, avatarUrl: msg.user.avatarUrl } : f
           )
         )
         // Only trigger toast/sound for notable transitions (the backend

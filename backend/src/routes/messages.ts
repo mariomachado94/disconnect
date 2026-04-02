@@ -61,8 +61,6 @@ router.post(
           fromUserId: senderId,
           toUserId: recipientId,
           content,
-          delivered: false,
-          read: false,
         },
         include: {
           sender: {
@@ -122,6 +120,7 @@ router.get('/conversation/:friendId', async (req: Request, res: Response) => {
           select: {
             id: true,
             displayName: true,
+            avatarUrl: true,
           },
         },
       },
@@ -145,9 +144,9 @@ router.post('/read/:friendId', async (req: Request, res: Response) => {
       where: {
         fromUserId: friendId,
         toUserId: currentUserId,
-        read: false,
+        readAt: null,
       },
-      data: { read: true },
+      data: { readAt: new Date() },
     });
 
     res.json({ message: 'Messages marked as read' });

@@ -14,6 +14,7 @@ model User {
   passwordHash String   @map("password_hash")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
+  avatarUrl    String?  @map("avatar_url")
 
   // Relationships
   sentFriendRequests     Friendship[] @relation("UserSentRequests")
@@ -53,9 +54,9 @@ model Message {
   fromUserId String   @map("from_user_id")
   toUserId   String   @map("to_user_id")
   content    String
-  sentAt     DateTime @default(now()) @map("sent_at")
-  delivered  Boolean  @default(false)
-  read       Boolean  @default(false)
+  sentAt      DateTime  @default(now()) @map("sent_at")
+  deliveredAt DateTime? @map("delivered_at")
+  readAt      DateTime? @map("read_at")
 
   sender   User @relation("MessageSender", fields: [fromUserId], references: [id], onDelete: Cascade)
   receiver User @relation("MessageReceiver", fields: [toUserId], references: [id], onDelete: Cascade)

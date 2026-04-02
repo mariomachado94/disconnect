@@ -56,6 +56,7 @@ Bad candidates: anything derivable by reading the code, git history, or existing
 - **`services/wsInstance.ts`** — Singleton getter/setter so route handlers can call `sendToUser` without circular deps
 - **`services/presence.ts`** — Redis-backed presence (online/away/offline computed from `lastSeen` timestamp)
 - **`services/tokenBlocklist.ts`** — Redis-backed JWT blocklist with auto-expiring TTL; used by auth middleware and WS connect
+- **`routes/avatar.ts`** — Avatar upload endpoint (multer, 2MB limit, images only), saves to `uploads/avatars/`
 - **`prisma/schema.prisma`** — PostgreSQL schema via Prisma ORM
 
 ### Frontend (`frontend/src/`)
@@ -66,6 +67,8 @@ Bad candidates: anything derivable by reading the code, git history, or existing
 - **`types/index.ts`** — Shared TypeScript types including the `WSMessage` discriminated union
 - **`components/ToastContainer.tsx`** — Fixed-position toast stack (top-right, `right-14` to clear TabStrip)
 - **`pages/`** — Login, Register, Main (three-panel layout when chat open, expanded contact list otherwise)
+- **`components/Avatar.tsx`** — Shared avatar component (image or initials fallback), used by ContactList, TabStrip, ChatWindow
+- **`components/AvatarUpload.tsx`** — Modal for uploading avatar, triggered from ContactList header
 - **`components/`** — ContactList, TabStrip, ChatWindow, AddFriendModal, PendingRequests
 
 ### Provider tree
@@ -138,6 +141,10 @@ The `presenceStatus` field on `AuthenticatedWebSocket` is initialized to `ONLINE
 **`force_logout` handling (frontend):** WSContext handles `{ type: 'force_logout' }` by calling `logout()` from AuthContext, which clears the JWT and redirects to login. This is the only server-initiated session termination path.
 
 **`pendingCount` / `pendingSeen` in WSContext:** Lives in WSContext (not ContactList) so the WS message handler can increment it when a `friend_request_received` event arrives.
+
+**Message delivery/read are timestamps, not booleans:** `deliveredAt` and `readAt` are nullable `DateTime` fields. `null` means "not yet delivered/read"; a non-null value is the timestamp when it happened. The old `delivered: true/false` and `read: true/false` booleans no longer exist.
+
+**Avatar upload and serving:** Avatars are uploaded via `POST /api/avatar` (multer, 2MB, images only) and stored on disk at `backend/uploads/avatars/{userId}.{ext}`. Served via `express.static` at `/uploads/...`. The `avatarUrl` field on User stores the relative path (e.g. `/uploads/avatars/abc.png`). Frontend prefixes with `VITE_API_URL` when rendering. The `Avatar` component handles the image-or-initials fallback logic — always use it instead of inline initials.
 
 **ContactItem defined outside ContactList:** Moving it inside causes React to remount all contact items on every parent re-render (e.g. every presence update). Keep it outside.
 

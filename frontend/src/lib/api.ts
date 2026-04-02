@@ -68,3 +68,19 @@ export const messagesApi = {
   markRead: (friendId: string, token: string) =>
     request(`/api/messages/read/${friendId}`, { method: 'POST' }, token),
 }
+
+// Avatar
+export const avatarApi = {
+  upload: async (file: File, token: string): Promise<User> => {
+    const formData = new FormData()
+    formData.append('avatar', file)
+    const res = await fetch(`${BASE}/api/avatar`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'Upload failed')
+    return data.user
+  },
+}

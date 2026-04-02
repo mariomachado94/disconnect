@@ -137,10 +137,10 @@ router.post('/accept/:friendshipId', async (req: Request, res: Response) => {
       data: { status: 'ACCEPTED' },
       include: {
         user: {
-          select: { id: true, email: true, displayName: true },
+          select: { id: true, email: true, displayName: true, avatarUrl: true },
         },
         friend: {
-          select: { id: true, email: true, displayName: true },
+          select: { id: true, email: true, displayName: true, avatarUrl: true },
         },
       },
     });
@@ -156,6 +156,7 @@ router.post('/accept/:friendshipId', async (req: Request, res: Response) => {
           id: updatedFriendship.friend.id,
           email: updatedFriendship.friend.email,
           displayName: updatedFriendship.friend.displayName,
+          avatarUrl: updatedFriendship.friend.avatarUrl,
           status: accepterPresence?.status || 'offline',
           lastSeen: accepterPresence?.lastSeen || 0,
         },
@@ -226,6 +227,7 @@ router.get('/', async (req: Request, res: Response) => {
             id: true,
             email: true,
             displayName: true,
+            avatarUrl: true,
           },
         },
         friend: {
@@ -233,6 +235,7 @@ router.get('/', async (req: Request, res: Response) => {
             id: true,
             email: true,
             displayName: true,
+            avatarUrl: true,
           },
         },
       },
@@ -255,6 +258,7 @@ router.get('/', async (req: Request, res: Response) => {
         id: friend.id,
         email: friend.email,
         displayName: friend.displayName,
+        avatarUrl: friend.avatarUrl,
         status: presence?.status || 'offline',
         lastSeen: presence?.lastSeen || 0,
       };
@@ -283,6 +287,7 @@ router.get('/requests/pending', async (req: Request, res: Response) => {
             id: true,
             email: true,
             displayName: true,
+            avatarUrl: true,
           },
         },
       },

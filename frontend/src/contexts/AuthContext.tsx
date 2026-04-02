@@ -9,6 +9,7 @@ interface AuthContextValue {
   login: (email: string, password: string) => Promise<void>
   register: (email: string, password: string, displayName: string) => Promise<void>
   logout: () => void
+  updateUser: (updates: Partial<User>) => void
   isLoading: boolean
 }
 
@@ -53,8 +54,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null)
   }, [])
 
+  const updateUser = useCallback((updates: Partial<User>) => {
+    setUser(prev => prev ? { ...prev, ...updates } : null)
+  }, [])
+
   return (
-    <AuthContext.Provider value={{ user, token, login, register, logout, isLoading }}>
+    <AuthContext.Provider value={{ user, token, login, register, logout, updateUser, isLoading }}>
       {children}
     </AuthContext.Provider>
   )

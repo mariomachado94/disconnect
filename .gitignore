@@ -14,6 +14,10 @@ backend/.env
 # Prisma
 backend/prisma/migrations/
 
+# Uploaded files
+backend/uploads/*
+!backend/uploads/avatars/.gitkeep
+
 # Frontend specific
 
 # Logs

@@ -355,12 +355,10 @@ export class WebSocketService {
         fromUserId: senderId,
         toUserId: recipientId,
         content: content.trim(),
-        delivered: false,
-        read: false,
       },
       include: {
         sender: {
-          select: { id: true, displayName: true },
+          select: { id: true, displayName: true, avatarUrl: true },
         },
       },
     });
@@ -384,7 +382,7 @@ export class WebSocketService {
       // Mark as delivered since recipient received it
       await prisma.message.update({
         where: { id: savedMessage.id },
-        data: { delivered: true },
+        data: { deliveredAt: new Date() },
       });
     }
   }
@@ -472,7 +470,7 @@ export class WebSocketService {
     // Get user info to include in the notification
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, displayName: true },
+      select: { id: true, displayName: true, avatarUrl: true },
     });
 
     // Send presence update to each friend that is currently connected

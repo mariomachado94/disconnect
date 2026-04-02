@@ -3,19 +3,15 @@ import type { Friend } from '../types'
 import { friendsApi } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import { useWS } from '../contexts/WSContext'
+import Avatar from './Avatar'
 import AddFriendModal from './AddFriendModal'
 import PendingRequests from './PendingRequests'
+import AvatarUpload from './AvatarUpload'
 
 interface Props {
   selectedFriendId: string | null
   onSelectFriend: (friend: Friend) => void
   fullscreen?: boolean
-}
-
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/)
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
 }
 
 function statusDot(status: Friend['status']) {
@@ -49,6 +45,7 @@ export default function ContactList({ selectedFriendId, onSelectFriend, fullscre
   const [offlineExpanded, setOfflineExpanded] = useState(false)
   const [showAddFriend, setShowAddFriend] = useState(false)
   const [showPending, setShowPending] = useState(false)
+  const [showAvatarUpload, setShowAvatarUpload] = useState(false)
 
   useEffect(() => {
     if (!token) return
@@ -63,9 +60,9 @@ export default function ContactList({ selectedFriendId, onSelectFriend, fullscre
     <div className={`flex flex-col h-full bg-gray-50 border-r border-gray-200 ${fullscreen ? 'flex-1' : 'w-52 shrink-0'}`}>
       {/* Header */}
       <div className="px-3 py-2 border-b border-gray-200 bg-white flex items-center gap-2">
-        <div className={`w-8 h-8 rounded bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-semibold shrink-0 ring-2 ${selfStatus === 'online' ? 'ring-green-500' : 'ring-yellow-400'}`}>
-          {user?.displayName ? initials(user.displayName) : ''}
-        </div>
+        <button onClick={() => setShowAvatarUpload(true)} className={`rounded ring-2 cursor-pointer ${selfStatus === 'online' ? 'ring-green-500' : 'ring-yellow-400'}`} title="Change avatar">
+          <Avatar displayName={user?.displayName ?? ''} avatarUrl={user?.avatarUrl ?? null} size="sm" />
+        </button>
         <div className="flex-1 min-w-0">
           <p className="text-xs font-bold text-gray-700 truncate">{user?.displayName}</p>
           <p className="text-xs text-gray-400 truncate">{user?.email}</p>
@@ -137,6 +134,9 @@ export default function ContactList({ selectedFriendId, onSelectFriend, fullscre
           setShowPending(false)
           if (token) friendsApi.getPending(token).then(reqs => setPendingCount(reqs.length))
         }} />
+      )}
+      {showAvatarUpload && (
+        <AvatarUpload onClose={() => setShowAvatarUpload(false)} />
       )}
     </div>
   )

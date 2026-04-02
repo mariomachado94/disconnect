@@ -1,4 +1,5 @@
 import type { Friend } from '../types';
+import Avatar from './Avatar';
 
 interface Props {
   tabs: Friend[];
@@ -6,12 +7,6 @@ interface Props {
   unreadIds: Set<string>;
   onSwitch: (id: string) => void;
   onClose: (id: string) => void;
-}
-
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
 export default function TabStrip({ tabs, activeId, unreadIds, onSwitch, onClose }: Props) {
@@ -34,21 +29,15 @@ export default function TabStrip({ tabs, activeId, unreadIds, onSwitch, onClose 
             <button
               onClick={() => onSwitch(friend.id)}
               title={friend.displayName}
-              className={`w-[48px] h-[48px] rounded flex items-center justify-center text-sm font-semibold cursor-pointer ring-2 ${
+              className={`rounded cursor-pointer ring-2 ${
                 friend.status === 'online'
                   ? 'ring-green-500'
                   : friend.status === 'away'
                     ? 'ring-yellow-400'
                     : 'ring-gray-300'
-              } ${
-                isActive
-                  ? 'bg-blue-50 text-blue-700'
-                  : hasUnread
-                    ? 'bg-amber-100 text-amber-700'
-                    : 'bg-gray-200 text-gray-600'
               }`}
             >
-              {initials(friend.displayName)}
+              <Avatar displayName={friend.displayName} avatarUrl={friend.avatarUrl} size="md" />
             </button>
 
             {/* Unread dot */}

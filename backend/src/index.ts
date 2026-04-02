@@ -2,9 +2,11 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import http from 'http';
+import path from 'path';
 import authRoutes from './routes/auth';
 import friendsRoutes from './routes/friends';
 import messagesRoutes from './routes/messages';
+import avatarRoutes from './routes/avatar';
 import { authenticate } from './middleware/auth';
 import { WebSocketService } from './services/websocket';
 import { setWsInstance } from './services/wsInstance';
@@ -21,6 +23,7 @@ const server = http.createServer(app);
 // Middleware
 app.use(cors());
 app.use(express.json());
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // Health check
 app.get('/health', (req, res) => {
@@ -36,6 +39,9 @@ app.use('/api/friends', friendsRoutes);
 // Messages routes (protected)
 app.use('/api/messages', messagesRoutes);
 
+// Avatar routes (protected)
+app.use('/api/avatar', avatarRoutes);
+
 // Protected route example
 app.get('/api/auth/me', authenticate, async (req, res) => {
   res.json({
@@ -43,6 +49,7 @@ app.get('/api/auth/me', authenticate, async (req, res) => {
       id: req.user!.id,
       email: req.user!.email,
       displayName: req.user!.displayName,
+      avatarUrl: req.user!.avatarUrl,
     },
   });
 });
