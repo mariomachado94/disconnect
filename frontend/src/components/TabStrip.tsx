@@ -1,39 +1,51 @@
-import type { Friend } from '../types'
+import type { Friend } from '../types';
 
 interface Props {
-  tabs: Friend[]
-  activeId: string | null
-  unreadIds: Set<string>
-  onSwitch: (id: string) => void
-  onClose: (id: string) => void
+  tabs: Friend[];
+  activeId: string | null;
+  unreadIds: Set<string>;
+  onSwitch: (id: string) => void;
+  onClose: (id: string) => void;
 }
 
 function initials(name: string): string {
-  const parts = name.trim().split(/\s+/)
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
 export default function TabStrip({ tabs, activeId, unreadIds, onSwitch, onClose }: Props) {
-  if (tabs.length === 0) return null
+  if (tabs.length === 0) return null;
 
   return (
-    <div className="flex flex-col w-10 shrink-0 h-full bg-gray-100 border-r border-gray-200">
-      {tabs.map(friend => {
-        const isActive = activeId === friend.id
-        const hasUnread = unreadIds.has(friend.id)
+    <div className="flex flex-col w-[60px] shrink-0 h-full bg-gray-100 border-r border-gray-200">
+      {tabs.map((friend) => {
+        const isActive = activeId === friend.id;
+        const hasUnread = unreadIds.has(friend.id);
 
         return (
-          <div key={friend.id} className="relative group">
+          <div key={friend.id} className={`relative group w-[60px] h-[60px] flex items-center justify-center ${
+                isActive
+                  ? 'bg-white border-r-2 border-blue-600'
+                  : hasUnread
+                    ? 'bg-amber-50 hover:bg-amber-100'
+                    : 'hover:bg-gray-200'
+              }`}>
             <button
               onClick={() => onSwitch(friend.id)}
               title={friend.displayName}
-              className={`w-10 h-10 flex items-center justify-center text-xs font-semibold cursor-pointer ${
+              className={`w-[48px] h-[48px] rounded flex items-center justify-center text-sm font-semibold cursor-pointer ring-2 ${
+                friend.status === 'online'
+                  ? 'ring-green-500'
+                  : friend.status === 'away'
+                    ? 'ring-yellow-400'
+                    : 'ring-gray-300'
+              } ${
                 isActive
-                  ? 'bg-white border-r-2 border-blue-600 text-blue-700'
+                  ? 'bg-blue-50 text-blue-700'
                   : hasUnread
-                  ? 'bg-amber-50 text-amber-700 hover:bg-amber-100'
-                  : 'text-gray-600 hover:bg-gray-200'
+                    ? 'bg-amber-100 text-amber-700'
+                    : 'bg-gray-200 text-gray-600'
               }`}
             >
               {initials(friend.displayName)}
@@ -46,15 +58,18 @@ export default function TabStrip({ tabs, activeId, unreadIds, onSwitch, onClose 
 
             {/* Close button */}
             <button
-              onClick={e => { e.stopPropagation(); onClose(friend.id) }}
-              className="absolute top-0.5 right-0.5 w-3 h-3 flex items-center justify-center text-[9px] text-gray-500 hover:text-gray-800 opacity-0 group-hover:opacity-100 cursor-pointer"
+              onClick={(e) => {
+                e.stopPropagation();
+                onClose(friend.id);
+              }}
+              className="absolute top-0.5 right-0.5 w-4 h-4 flex items-center justify-center text-xs text-gray-500 hover:text-gray-800 opacity-0 group-hover:opacity-100 cursor-pointer"
               aria-label={`Close ${friend.displayName}`}
             >
               ×
             </button>
           </div>
-        )
+        );
       })}
     </div>
-  )
+  );
 }

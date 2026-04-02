@@ -89,6 +89,10 @@ export default function Main() {
   }
 
   function handleSwitchTab(id: string) {
+    if (id === activeTabId) {
+      setActiveTabId(null)
+      return
+    }
     setActiveTabId(id)
     setUnreadIds(prev => { const next = new Set(prev); next.delete(id); return next })
   }

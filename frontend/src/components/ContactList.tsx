@@ -12,6 +12,12 @@ interface Props {
   fullscreen?: boolean
 }
 
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/)
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+}
+
 function statusDot(status: Friend['status']) {
   if (status === 'online') return <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />
   if (status === 'away') return <span className="w-2 h-2 rounded-full bg-yellow-400 inline-block" />
@@ -38,7 +44,7 @@ function ContactItem({ friend, isSelected, onSelect }: ContactItemProps) {
 
 export default function ContactList({ selectedFriendId, onSelectFriend, fullscreen }: Props) {
   const { token, user, logout } = useAuth()
-  const { friends, setFriends, pendingCount, setPendingCount, pendingSeen, setPendingSeen } = useWS()
+  const { friends, setFriends, selfStatus, pendingCount, setPendingCount, pendingSeen, setPendingSeen } = useWS()
   const [onlineExpanded, setOnlineExpanded] = useState(true)
   const [offlineExpanded, setOfflineExpanded] = useState(false)
   const [showAddFriend, setShowAddFriend] = useState(false)
@@ -56,9 +62,14 @@ export default function ContactList({ selectedFriendId, onSelectFriend, fullscre
   return (
     <div className={`flex flex-col h-full bg-gray-50 border-r border-gray-200 ${fullscreen ? 'flex-1' : 'w-52 shrink-0'}`}>
       {/* Header */}
-      <div className="px-3 py-2 border-b border-gray-200 bg-white">
-        <p className="text-xs font-bold text-gray-700 truncate">{user?.displayName}</p>
-        <p className="text-xs text-gray-400 truncate">{user?.email}</p>
+      <div className="px-3 py-2 border-b border-gray-200 bg-white flex items-center gap-2">
+        <div className={`w-8 h-8 rounded bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-semibold shrink-0 ring-2 ${selfStatus === 'online' ? 'ring-green-500' : 'ring-yellow-400'}`}>
+          {user?.displayName ? initials(user.displayName) : ''}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-bold text-gray-700 truncate">{user?.displayName}</p>
+          <p className="text-xs text-gray-400 truncate">{user?.email}</p>
+        </div>
       </div>
 
       {/* Contact groups */}

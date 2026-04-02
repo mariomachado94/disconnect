@@ -19,6 +19,7 @@ interface WSContextValue {
   lastIncoming: Message | null
   lastPresenceChange: PresenceChange | null
   isConnected: boolean
+  selfStatus: 'online' | 'away'
   pendingCount: number
   setPendingCount: React.Dispatch<React.SetStateAction<number>>
   pendingSeen: boolean
@@ -39,6 +40,7 @@ export function WSProvider({ children }: { children: ReactNode }) {
   const [isConnected, setIsConnected] = useState(false)
   const [pendingCount, setPendingCount] = useState(0)
   const [pendingSeen, setPendingSeen] = useState(false)
+  const [selfStatus, setSelfStatus] = useState<'online' | 'away'>('online')
   const wsRef = useRef<WebSocket | null>(null)
   const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const lastActivityRef = useRef<number>(Date.now())
@@ -52,10 +54,16 @@ export function WSProvider({ children }: { children: ReactNode }) {
     window.addEventListener('mousemove', markActive)
     window.addEventListener('keydown', markActive)
     window.addEventListener('click', markActive)
+    // Mirror the backend's 30s away threshold locally so the UI can reflect it
+    const statusCheck = setInterval(() => {
+      const idleMs = Date.now() - lastActivityRef.current
+      setSelfStatus(idleMs < 30_000 ? 'online' : 'away')
+    }, 2_000)
     return () => {
       window.removeEventListener('mousemove', markActive)
       window.removeEventListener('keydown', markActive)
       window.removeEventListener('click', markActive)
+      clearInterval(statusCheck)
     }
   }, [])
 
@@ -165,7 +173,7 @@ export function WSProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <WSContext.Provider value={{ friends, setFriends, messages, seedConversation, sendMessage, lastFailedRecipient, lastIncoming, lastPresenceChange, isConnected, pendingCount, setPendingCount, pendingSeen, setPendingSeen }}>
+    <WSContext.Provider value={{ friends, setFriends, messages, seedConversation, sendMessage, lastFailedRecipient, lastIncoming, lastPresenceChange, isConnected, selfStatus, pendingCount, setPendingCount, pendingSeen, setPendingSeen }}>
       {children}
     </WSContext.Provider>
   )
