@@ -3,6 +3,12 @@ import type { ReactNode } from 'react'
 import type { Friend, Message, WSMessage } from '../types'
 import { useAuth } from './AuthContext'
 
+export interface PresenceChange {
+  userId: string
+  displayName: string
+  status: 'online' | 'away' | 'offline'
+}
+
 interface WSContextValue {
   friends: Friend[]
   setFriends: React.Dispatch<React.SetStateAction<Friend[]>>
@@ -11,6 +17,7 @@ interface WSContextValue {
   sendMessage: (recipientId: string, content: string) => void
   lastFailedRecipient: string | null
   lastIncoming: Message | null
+  lastPresenceChange: PresenceChange | null
   isConnected: boolean
   pendingCount: number
   setPendingCount: React.Dispatch<React.SetStateAction<number>>
@@ -28,6 +35,7 @@ export function WSProvider({ children }: { children: ReactNode }) {
   const [messages, setMessages] = useState<Record<string, Message[]>>({})
   const [lastFailedRecipient, setLastFailedRecipient] = useState<string | null>(null)
   const [lastIncoming, setLastIncoming] = useState<Message | null>(null)
+  const [lastPresenceChange, setLastPresenceChange] = useState<PresenceChange | null>(null)
   const [isConnected, setIsConnected] = useState(false)
   const [pendingCount, setPendingCount] = useState(0)
   const [pendingSeen, setPendingSeen] = useState(false)
@@ -73,13 +81,13 @@ export function WSProvider({ children }: { children: ReactNode }) {
       setIsConnected(true)
       heartbeatRef.current = setInterval(() => {
         if (ws.readyState !== WebSocket.OPEN) return
-        // Only report activity if the user has interacted in the last 15s.
+        // Only report activity if the user has interacted in the last 2s.
         // If they haven't, skip — the backend will transition them to away/offline.
         const idleMs = Date.now() - lastActivityRef.current
-        if (idleMs < 15_000) {
+        if (idleMs < 2_000) {
           ws.send(JSON.stringify({ type: 'heartbeat' }))
         }
-      }, 15_000)
+      }, 2_000)
     }
 
     ws.onclose = () => {
@@ -100,11 +108,17 @@ export function WSProvider({ children }: { children: ReactNode }) {
       } else if (msg.type === 'message_failed') {
         setLastFailedRecipient(msg.recipientId)
       } else if (msg.type === 'presence_change') {
+        // Always update friends list so the contact list shows current status
         setFriends(prev =>
           prev.map(f =>
             f.id === msg.user.id ? { ...f, status: msg.status } : f
           )
         )
+        // Only trigger toast/sound for notable transitions (the backend
+        // sets notify: true only for genuine offline → online).
+        if (msg.notify) {
+          setLastPresenceChange({ userId: msg.user.id, displayName: msg.user.displayName, status: msg.status })
+        }
       } else if (msg.type === 'friend_accepted') {
         setFriends(prev => [...prev, msg.friend])
       } else if (msg.type === 'friend_request_received') {
@@ -151,7 +165,7 @@ export function WSProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <WSContext.Provider value={{ friends, setFriends, messages, seedConversation, sendMessage, lastFailedRecipient, lastIncoming, isConnected, pendingCount, setPendingCount, pendingSeen, setPendingSeen }}>
+    <WSContext.Provider value={{ friends, setFriends, messages, seedConversation, sendMessage, lastFailedRecipient, lastIncoming, lastPresenceChange, isConnected, pendingCount, setPendingCount, pendingSeen, setPendingSeen }}>
       {children}
     </WSContext.Provider>
   )

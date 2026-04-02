@@ -37,7 +37,7 @@ export type WSMessage =
   | { type: 'message_received'; message: Message }
   | { type: 'message_sent'; message: Message }
   | { type: 'message_failed'; reason: string; recipientId: string; message: string }
-  | { type: 'presence_change'; user: { id: string; displayName: string }; status: 'online' | 'away' | 'offline' }
+  | { type: 'presence_change'; user: { id: string; displayName: string }; status: 'online' | 'away' | 'offline'; notify: boolean }
   | { type: 'friend_accepted'; friend: Friend }
   | { type: 'friend_request_received'; from: { id: string; displayName: string } }
   | { type: 'heartbeat_ack' }

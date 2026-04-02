@@ -5,21 +5,44 @@ import { PresenceService, PresenceStatus } from './presence';
 import { TokenBlocklist } from './tokenBlocklist';
 import { prisma } from '../utils/prisma';
 
+// Debug logging — enabled with DEBUG_WS=1 (or any truthy value).
+// Verbose lifecycle logs (connect/disconnect/timers/monitor) go through this.
+// Important operational events (presence notifications, force_logout, errors) stay as console.log.
+const debugWs = (...args: any[]) => {
+  if (process.env.DEBUG_WS) console.log(...args);
+};
+
 // Extend the base WebSocket type to include our custom properties
 interface AuthenticatedWebSocket extends WebSocket {
   userId?: string;
   token?: string;
   isAlive?: boolean;
   presenceStatus?: PresenceStatus; // last state we notified friends about
+  established?: boolean; // true after addConnection — guards handleDisconnect
 }
 
 export class WebSocketService {
   private wss: WebSocketServer;
-  // Map of userId -> WebSocket connection for fast lookups
-  private connections: Map<string, AuthenticatedWebSocket> = new Map();
-  // Pending disconnect timers — if the user doesn't reconnect within 90s,
-  // their token is blocklisted. Cancelled on reconnect.
-  private disconnectTimers: Map<string, NodeJS.Timeout> = new Map();
+  // Map of userId -> set of active WebSocket connections.
+  // A user may have multiple tabs open, each with its own socket.
+  private connections: Map<string, Set<AuthenticatedWebSocket>> = new Map();
+  // Cached display names for readable logs (populated on connect)
+  private displayNames: Map<string, string> = new Map();
+  // If the user doesn't reconnect within 90s of their last tab closing,
+  // their token is blocklisted — forcing a fresh login. Cancelled on reconnect.
+  private forceReloginTimers: Map<string, NodeJS.Timeout> = new Map();
+  // Short grace period before marking a user offline. Absorbs page refreshes
+  // and brief network blips so friends never see a false offline→online flap.
+  private disconnectGraceTimers: Map<string, NodeJS.Timeout> = new Map();
+  // Tracks whether friends have been notified that this user is online.
+  // Set when the ONLINE notification fires; cleared when OFFLINE fires.
+  // Used to suppress duplicate ONLINE notifications (e.g. page refresh —
+  // friends already know you're online, no need to tell them again).
+  private notifiedOnline: Set<string> = new Set();
+  // Pending ONLINE notification timers. A short delay (300ms) lets React
+  // StrictMode's double-mount settle before we decide whether to notify.
+  // Cancelled if the user disconnects before it fires.
+  private onlineNotifyTimers: Map<string, NodeJS.Timeout> = new Map();
 
   constructor(server: Server) {
     this.wss = new WebSocketServer({ server, path: '/ws' });
@@ -48,9 +71,52 @@ export class WebSocketService {
     this.initialize();
   }
 
+  // Returns the number of live connections for a user
+  private connectionCount(userId: string): number {
+    return this.connections.get(userId)?.size ?? 0;
+  }
+
+  // Add a connection for a user, returns the new count
+  private addConnection(userId: string, ws: AuthenticatedWebSocket): number {
+    let set = this.connections.get(userId);
+    if (!set) {
+      set = new Set();
+      this.connections.set(userId, set);
+    }
+    set.add(ws);
+    return set.size;
+  }
+
+  // Remove a connection for a user, returns the remaining count
+  private removeConnection(userId: string, ws: AuthenticatedWebSocket): number {
+    const set = this.connections.get(userId);
+    if (!set) return 0;
+    set.delete(ws);
+    if (set.size === 0) {
+      this.connections.delete(userId);
+      return 0;
+    }
+    return set.size;
+  }
+
+  // Readable label for logs: "Alice (e86f)" instead of raw UUIDs
+  private tag(userId: string): string {
+    const name = this.displayNames.get(userId) ?? '??';
+    return `${name} (${userId.slice(0, 4)})`;
+  }
+
+  // Send a message to all of a user's active connections
+  private sendToAllConnections(userId: string, data: any) {
+    const set = this.connections.get(userId);
+    if (!set) return;
+    for (const ws of set) {
+      this.send(ws, data);
+    }
+  }
+
   private initialize() {
     this.wss.on('connection', async (ws: AuthenticatedWebSocket, req) => {
-      console.log('New WebSocket connection attempt');
+      debugWs('New WebSocket connection attempt');
 
       // Extract token from query params (?token=...)
       // e.g. ws://localhost:3001/ws?token=JWT_TOKEN
@@ -65,52 +131,100 @@ export class WebSocketService {
       try {
         const payload = verifyToken(token);
 
-        // Reject blocklisted tokens (e.g. after disconnect timeout)
+        // Set identity and register event handlers BEFORE any async work.
+        // If we await first, the socket could close during the yield and
+        // the 'close' event would be lost (no listener registered yet),
+        // leaving a zombie connection in the set forever.
+        ws.userId = payload.userId;
+        ws.token = token;
+        ws.isAlive = true;
+        ws.presenceStatus = PresenceStatus.ONLINE;
+
+        ws.on('close', () => this.handleDisconnect(ws));
+        ws.on('pong', () => { ws.isAlive = true; });
+        ws.on('message', (message) => {
+          if (ws.established) this.handleMessage(ws, message.toString());
+        });
+
+        // Async auth checks — safe to yield now, close handler is registered
         const blocked = await TokenBlocklist.isBlocklisted(token);
         if (blocked) {
           ws.close(1008, 'Token revoked');
           return;
         }
 
-        ws.userId = payload.userId;
-        ws.token = token;
-        ws.isAlive = true;
-        ws.presenceStatus = PresenceStatus.ONLINE;
-
-        // Cancel any pending disconnect timer — user reconnected in time
-        const pendingTimer = this.disconnectTimers.get(payload.userId);
-        if (pendingTimer) {
-          clearTimeout(pendingTimer);
-          this.disconnectTimers.delete(payload.userId);
-          console.log(`Cancelled disconnect timer for user ${payload.userId} (reconnected)`);
+        // Cache display name for readable logs
+        if (!this.displayNames.has(payload.userId)) {
+          const u = await prisma.user.findUnique({ where: { id: payload.userId }, select: { displayName: true } });
+          if (u) this.displayNames.set(payload.userId, u.displayName);
         }
 
-        // Store connection for this user
-        this.connections.set(payload.userId, ws);
+        // Cancel any pending relogin timer — user reconnected in time
+        const pendingTimer = this.forceReloginTimers.get(payload.userId);
+        if (pendingTimer) {
+          clearTimeout(pendingTimer);
+          this.forceReloginTimers.delete(payload.userId);
+          debugWs(`[connect] ${this.tag(payload.userId)} — cancelled forceReloginTimer (reconnected before 90s)`);
+        }
+
+        // Cancel any pending grace timer so it doesn't mark the user offline
+        // while they're connected.
+        const graceTimer = this.disconnectGraceTimers.get(payload.userId);
+        if (graceTimer) {
+          clearTimeout(graceTimer);
+          this.disconnectGraceTimers.delete(payload.userId);
+          debugWs(`[connect] ${this.tag(payload.userId)} — cancelled grace timer (reconnected before 1s)`);
+        }
+
+        // If the socket closed during the async gap (e.g. StrictMode cleanup
+        // sent a close frame while we were awaiting), don't add it to the
+        // connection set — it would become a zombie that never gets removed
+        // because the close event already fired and was ignored (established
+        // was still false at that point).
+        if (ws.readyState !== WebSocket.OPEN) {
+          debugWs(`[connect] ${this.tag(payload.userId)} — socket closed during async auth, skipping (zombie prevention)`);
+          return;
+        }
+
+        // Was the user already connected on another tab?
+        const wasConnected = this.connectionCount(payload.userId) > 0;
+
+        // Add this connection to the user's set and mark as established.
+        // handleDisconnect checks `established` — any close event that
+        // fires before this point is harmlessly ignored.
+        const count = this.addConnection(payload.userId, ws);
+        ws.established = true;
 
         // Mark user as online in Redis
         PresenceService.setOnline(payload.userId);
-        console.log(`User ${payload.userId} connected`);
+        debugWs(`[connect] ${this.tag(payload.userId)} — tab #${count}, wasConnected=${wasConnected}, notifiedOnline=${this.notifiedOnline.has(payload.userId)}`);
 
-        // Notify this user's friends that they came online
-        this.notifyFriendsPresenceChange(payload.userId, PresenceStatus.ONLINE);
+        // Notify friends only on the FIRST connection for this user.
+        // Additional tabs don't change presence — user was already online.
+        if (!wasConnected) {
+          // Schedule the notification with a short delay so React StrictMode's
+          // ephemeral mount/unmount/remount cycle settles before we fire.
+          // Each new first-connection restarts the timer.
+          const existingTimer = this.onlineNotifyTimers.get(payload.userId);
+          if (existingTimer) clearTimeout(existingTimer);
 
-        // Handle incoming messages from this client
-        ws.on('message', (message) => {
-          this.handleMessage(ws, message.toString());
-        });
-
-        // Handle pong responses (part of heartbeat mechanism)
-        // When server pings, client responds with pong.
-        // We mark the connection as alive so it isn't terminated.
-        ws.on('pong', () => {
-          ws.isAlive = true;
-        });
-
-        // Handle disconnection (clean close or network drop)
-        ws.on('close', () => {
-          this.handleDisconnect(ws);
-        });
+          const userId = payload.userId;
+          const timer = setTimeout(async () => {
+            this.onlineNotifyTimers.delete(userId);
+            const connCount = this.connectionCount(userId);
+            const alreadyNotified = this.notifiedOnline.has(userId);
+            debugWs(`[onlineNotify] ${this.tag(userId)} — 300ms timer fired: connCount=${connCount}, alreadyNotified=${alreadyNotified}`);
+            // Only notify if: (a) user is still connected, (b) friends
+            // haven't already been told (e.g. page refresh — they already
+            // know you're online).
+            if (connCount > 0 && !alreadyNotified) {
+              this.notifiedOnline.add(userId);
+              debugWs(`[onlineNotify] ${this.tag(userId)} — sending ONLINE notify=true to friends`);
+              await this.notifyFriendsPresenceChange(userId, PresenceStatus.ONLINE, true);
+            }
+          }, 300);
+          this.onlineNotifyTimers.set(payload.userId, timer);
+        }
 
         // Confirm successful connection to the client
         this.send(ws, {
@@ -158,9 +272,19 @@ export class WebSocketService {
           if (ws.userId) {
             await PresenceService.updateActivity(ws.userId);
             // If the presence monitor had already moved them to AWAY, coming
-            // back with activity means they're ONLINE again — notify friends.
+            // back with activity means they're ONLINE again — notify friends
+            // (but not as a "notable" event — no toast, just list update).
+            // Update ALL sockets for this user, not just the active one —
+            // otherwise the monitor may read a stale AWAY from a sibling
+            // socket and fire a redundant notification or skip updates.
             if (ws.presenceStatus === PresenceStatus.AWAY) {
-              ws.presenceStatus = PresenceStatus.ONLINE;
+              debugWs(`[heartbeat] ${this.tag(ws.userId)} — AWAY→ONLINE (activity detected)`);
+              const userSockets = this.connections.get(ws.userId);
+              if (userSockets) {
+                for (const s of userSockets) {
+                  s.presenceStatus = PresenceStatus.ONLINE;
+                }
+              }
               await this.notifyFriendsPresenceChange(ws.userId, PresenceStatus.ONLINE);
             }
           }
@@ -247,13 +371,15 @@ export class WebSocketService {
       message: savedMessage,
     });
 
-    // Deliver to recipient in real-time if they have an active connection
-    const recipientWs = this.connections.get(recipientId);
-    if (recipientWs) {
-      this.send(recipientWs, {
-        type: 'message_received',
-        message: savedMessage,
-      });
+    // Deliver to recipient in real-time — send to all their open tabs
+    const recipientSet = this.connections.get(recipientId);
+    if (recipientSet && recipientSet.size > 0) {
+      for (const recipientWs of recipientSet) {
+        this.send(recipientWs, {
+          type: 'message_received',
+          message: savedMessage,
+        });
+      }
 
       // Mark as delivered since recipient received it
       await prisma.message.update({
@@ -265,39 +391,74 @@ export class WebSocketService {
 
   // Called when a WebSocket connection closes (clean or unclean)
   private async handleDisconnect(ws: AuthenticatedWebSocket) {
-    if (ws.userId) {
-      // Only clean up presence if this is still the active connection for this user.
-      // A newer connection may have already replaced it in the map (e.g. reconnect),
-      // in which case we should leave presence alone.
-      if (this.connections.get(ws.userId) !== ws) return;
+    // Ignore close events for sockets that were never fully established
+    // (e.g. closed during the async auth check before addConnection ran).
+    if (!ws.userId || !ws.established) {
+      debugWs(`[disconnect] ignored — userId=${ws.userId ?? 'none'}, established=${ws.established ?? false}`);
+      return;
+    }
 
-      console.log(`User ${ws.userId} disconnected`);
-      this.connections.delete(ws.userId);
+    const userId = ws.userId;
+    const remaining = this.removeConnection(userId, ws);
 
-      // Remove presence from Redis immediately
-      await PresenceService.setOffline(ws.userId);
+    // If the user still has other tabs open, nothing to do —
+    // they're still online, no presence change needed.
+    if (remaining > 0) {
+      debugWs(`[disconnect] ${this.tag(userId)} — closed a tab (${remaining} remaining)`);
+      return;
+    }
 
-      // Notify friends this user went offline
-      await this.notifyFriendsPresenceChange(ws.userId, PresenceStatus.OFFLINE);
+    // Last connection closed
+    debugWs(`[disconnect] ${this.tag(userId)} — last tab closed. Starting 1s grace timer. notifiedOnline=${this.notifiedOnline.has(userId)}`);
 
-      // Start a 90s timer — if the user doesn't reconnect, blocklist their token.
-      // This enforces "online means present": closing the browser for more than
-      // 90s means you need to log in again.
-      if (ws.token) {
-        const userId = ws.userId;
-        const token = ws.token;
-        const timer = setTimeout(async () => {
-          this.disconnectTimers.delete(userId);
-          await TokenBlocklist.blocklist(token);
-          console.log(`Token blocklisted for user ${userId} (disconnect timeout)`);
-        }, 90_000);
-        this.disconnectTimers.set(userId, timer);
+    // Cancel any pending ONLINE notification — user disconnected before
+    // the stabilization delay fired.
+    const notifyTimer = this.onlineNotifyTimers.get(userId);
+    if (notifyTimer) {
+      clearTimeout(notifyTimer);
+      this.onlineNotifyTimers.delete(userId);
+      debugWs(`[disconnect] ${this.tag(userId)} — cancelled pending onlineNotify timer`);
+    }
+
+    // Don't mark offline immediately — give a 1s grace period for page
+    // refreshes and brief network blips. If the user reconnects within
+    // this window, friends never see an offline/online flap.
+    const graceTimer = setTimeout(async () => {
+      this.disconnectGraceTimers.delete(userId);
+      const connCount = this.connectionCount(userId);
+      debugWs(`[graceTimer] ${this.tag(userId)} — 1s grace expired. connCount=${connCount}`);
+      // Only go offline if they haven't reconnected
+      if (connCount === 0) {
+        this.notifiedOnline.delete(userId);
+        debugWs(`[graceTimer] ${this.tag(userId)} — setting OFFLINE in Redis, notifying friends`);
+        await PresenceService.setOffline(userId);
+        await this.notifyFriendsPresenceChange(userId, PresenceStatus.OFFLINE);
+      } else {
+        debugWs(`[graceTimer] ${this.tag(userId)} — reconnected during grace, skipping offline`);
       }
+    }, 1_000);
+    this.disconnectGraceTimers.set(userId, graceTimer);
+
+    // Start a 90s timer — if the user doesn't reconnect, blocklist their token.
+    // This enforces "online means present": closing the browser for more than
+    // 90s means you need to log in again.
+    if (ws.token) {
+      const token = ws.token;
+      debugWs(`[disconnect] ${this.tag(userId)} — starting 90s forceReloginTimer`);
+      const timer = setTimeout(async () => {
+        this.forceReloginTimers.delete(userId);
+        await TokenBlocklist.blocklist(token);
+        console.log(`[forceRelogin] ${this.tag(userId)} — token blocklisted (90s timeout)`);
+      }, 90_000);
+      this.forceReloginTimers.set(userId, timer);
     }
   }
 
-  // Broadcast a presence change (online/away/offline) to all of a user's online friends
-  private async notifyFriendsPresenceChange(userId: string, status: PresenceStatus) {
+  // Broadcast a presence change to all of a user's online friends.
+  // `notify` signals whether this is a "notable" transition (e.g. offline → online)
+  // that should trigger a toast/sound on the friend's client, vs a quiet status
+  // update (e.g. away → online) that only updates the contact list.
+  private async notifyFriendsPresenceChange(userId: string, status: PresenceStatus, notify = false) {
     // Get all accepted friendships for this user
     const friendships = await prisma.friendship.findMany({
       where: {
@@ -315,18 +476,21 @@ export class WebSocketService {
     });
 
     // Send presence update to each friend that is currently connected
+    const deliveredTo: string[] = [];
     for (const friendship of friendships) {
       const friendId = friendship.userId === userId ? friendship.friendId : friendship.userId;
-
-      const friendWs = this.connections.get(friendId);
-      if (friendWs) {
-        this.send(friendWs, {
-          type: 'presence_change',
-          user,
-          status,
-        });
+      const friendConns = this.connectionCount(friendId);
+      if (friendConns > 0) {
+        deliveredTo.push(`${this.tag(friendId)}(${friendConns})`);
       }
+      this.sendToAllConnections(friendId, {
+        type: 'presence_change',
+        user,
+        status,
+        notify,
+      });
     }
+    console.log(`[presence] ${this.tag(userId)} → ${status}${notify ? ' (NOTIFY)' : ''} — sent to: ${deliveredTo.length > 0 ? deliveredTo.join(', ') : '(no connected friends)'}`);
   }
 
   // Helper: safely send JSON to a WebSocket client
@@ -354,7 +518,7 @@ export class WebSocketService {
         ws.isAlive = false;
         ws.ping();
       });
-    }, 30000); // 30 seconds
+    }, 2_000); // 2 seconds
 
     // Clean up interval when server closes
     this.wss.on('close', () => {
@@ -363,51 +527,64 @@ export class WebSocketService {
   }
 
   // Actively monitors all connected users for inactivity.
-  // Runs every 10 seconds and transitions users through online → away → offline.
+  // Runs every 10 seconds and transitions users through online -> away -> offline.
   // When offline threshold is crossed:
-  //   - sends a force_logout message to the client
-  //   - closes the WebSocket connection
+  //   - sends a force_logout message to ALL of the user's connections
+  //   - closes all WebSocket connections
   //   - notifies the user's friends
   // When away threshold is crossed:
   //   - notifies friends (status_change: away)
   // Avoids duplicate notifications by tracking presenceStatus per connection.
   private startPresenceMonitor() {
     const interval = setInterval(async () => {
-      for (const [userId, ws] of this.connections) {
+      // Iterate unique userIds (not individual sockets)
+      for (const [userId, wsSet] of this.connections) {
         const presence = await PresenceService.getPresence(userId);
         const newStatus = presence?.status ?? PresenceStatus.OFFLINE;
-        const prevStatus = ws.presenceStatus ?? PresenceStatus.ONLINE;
+
+        // Use the first socket's presenceStatus as the canonical previous status.
+        // All sockets for the same user share the same logical presence state.
+        const firstWs = wsSet.values().next().value;
+        if (!firstWs) continue;
+        const prevStatus = firstWs.presenceStatus ?? PresenceStatus.ONLINE;
 
         if (newStatus === prevStatus) continue;
 
-        ws.presenceStatus = newStatus;
+        debugWs(`[monitor] ${this.tag(userId)} — ${prevStatus}→${newStatus} (sockets: ${wsSet.size})`);
+
+        // Update presenceStatus on ALL sockets for this user
+        for (const ws of wsSet) {
+          ws.presenceStatus = newStatus;
+        }
 
         if (newStatus === PresenceStatus.OFFLINE) {
-          console.log(`User ${userId} exceeded inactivity limit — forcing logout`);
-          // Tell the client to sign out before we close the socket
-          this.send(ws, { type: 'force_logout', reason: 'inactivity' });
-          // Remove from connections first so handleDisconnect won't double-fire
-          this.connections.delete(userId);
-          // Blocklist token immediately — user was already idle 90s while connected,
-          // no additional grace period needed
-          if (ws.token) {
-            await TokenBlocklist.blocklist(ws.token);
+          console.log(`[monitor] ${this.tag(userId)} — forcing logout (inactivity)`);
+          // Tell all tabs to sign out, then close them
+          for (const ws of wsSet) {
+            this.send(ws, { type: 'force_logout', reason: 'inactivity' });
+            // Blocklist this tab's token
+            if (ws.token) {
+              await TokenBlocklist.blocklist(ws.token);
+            }
+            ws.close();
           }
+          // Remove all connections so handleDisconnect won't double-fire
+          this.connections.delete(userId);
+          this.notifiedOnline.delete(userId);
           // Cancel any pending disconnect timer (defensive cleanup)
-          const timer = this.disconnectTimers.get(userId);
+          const timer = this.forceReloginTimers.get(userId);
           if (timer) {
             clearTimeout(timer);
-            this.disconnectTimers.delete(userId);
+            this.forceReloginTimers.delete(userId);
           }
-          ws.close();
-          // Presence is already cleared by getPresence(); notify friends
+          // Notify friends
           await this.notifyFriendsPresenceChange(userId, PresenceStatus.OFFLINE);
         } else if (newStatus === PresenceStatus.AWAY) {
-          console.log(`User ${userId} is now away`);
+          debugWs(`[monitor] ${this.tag(userId)} — transitioning to AWAY`);
           await this.notifyFriendsPresenceChange(userId, PresenceStatus.AWAY);
         }
       }
-    }, 10_000); // check every 10 seconds
+    }, 1_000); // check every 1 second
 
     this.wss.on('close', () => clearInterval(interval));
   }
@@ -416,7 +593,6 @@ export class WebSocketService {
   // Used by other parts of the application (e.g. REST routes)
   // to push real-time events to connected clients.
   sendToUser(userId: string, data: any) {
-    const ws = this.connections.get(userId);
-    if (ws) this.send(ws, data);
+    this.sendToAllConnections(userId, data);
   }
 }
