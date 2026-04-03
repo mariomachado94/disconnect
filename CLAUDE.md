@@ -46,12 +46,14 @@ Before every commit, review the work done in that session and ask: *has anything
 Good candidates: gotchas uncovered by a bug, coupling between two subsystems, constraints not visible from the code alone, patterns that are easy to misunderstand.
 Bad candidates: anything derivable by reading the code, git history, or existing documentation.
 
+Also update `README.md` if the commit changes anything a developer would need to know: new endpoints (add to the API table + curl example), new environment variables, new npm scripts, changed project structure, new debugging tools, or new troubleshooting scenarios. README.md is the human developer manual — keep it current.
+
 ## Architecture
 
 ### Backend (`backend/src/`)
 - **`index.ts`** — Express + HTTP server, mounts routes, initializes WebSocketService, starts listening
-- **`routes/`** — auth, friends, messages (all list endpoints wrap arrays in an object key — see API Shapes below)
-- **`middleware/authenticate.ts`** — JWT validation, attaches `req.user`
+- **`routes/`** — auth, friends, messages, avatar (all list endpoints wrap arrays in an object key — see API Shapes below)
+- **`middleware/auth.ts`** — JWT validation, attaches `req.user`
 - **`services/websocket.ts`** — WebSocketService class, manages `userId → Set<WebSocket>` (multi-tab), heartbeats, message routing
 - **`services/wsInstance.ts`** — Singleton getter/setter so route handlers can call `sendToUser` without circular deps
 - **`services/presence.ts`** — Redis-backed presence (online/away/offline computed from `lastSeen` timestamp)
@@ -166,7 +168,7 @@ The `presenceStatus` field on `AuthenticatedWebSocket` is initialized to `ONLINE
 
 **Opening a chat** (clicking a contact) adds it to `openTabIds` if not already present, then sets it as active. Clicking a contact whose tab is already open just switches to it without duplicating.
 
-**Tab strip** sits between ContactList and ChatWindow — a 40px wide vertical column of square boxes showing contact initials. Active tab has a left blue border + white background. Close button (×) appears on hover.
+**Tab strip** sits between ContactList and ChatWindow — a 60px wide vertical column of square boxes showing avatars (or initials fallback). Active tab has a right blue border + white background. Close button (×) appears on hover.
 
 **Unread tab state:** `unreadIds: Set<string>` lives in `Main.tsx`. When a `message_received` WS event arrives for a sender who is not the active chat, their tab is opened (if not already), marked unread, and a notification sound plays. Unread tabs render with an amber background + small amber dot. The unread state clears when the user switches to, opens from the contact list, or closes that tab.
 
