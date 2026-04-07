@@ -237,8 +237,10 @@ curl http://localhost:3001/api/friends \
 | Method | Path | Description |
 |---|---|---|
 | `POST` | `/api/messages/send` | Send message (recipient must be online) |
-| `GET` | `/api/messages/conversation/:friendId` | Get conversation history |
+| `GET` | `/api/messages/conversation/:friendId` | Get conversation history (last 24 hours only) |
 | `POST` | `/api/messages/read/:friendId` | Mark messages as read |
+
+> **Chat history policy:** Only messages from the last 24 hours are returned. Within that window, messages from before the current login session appear greyed out; current-session messages display normally. This aligns with Disconnect's "present means present" philosophy.
 
 ```bash
 # Send a message (recipient must be connected via WebSocket)

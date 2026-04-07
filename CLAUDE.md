@@ -150,6 +150,10 @@ The `presenceStatus` field on `AuthenticatedWebSocket` is initialized to `ONLINE
 
 **ContactItem defined outside ContactList:** Moving it inside causes React to remount all contact items on every parent re-render (e.g. every presence update). Keep it outside.
 
+**24-hour message retention in API:** The `GET /api/messages/conversation/:friendId` endpoint only returns messages from the last 24 hours (`sentAt >= now - 24h`). Messages older than that exist in the database but are never sent to the client. This is a deliberate design choice aligned with Disconnect's ephemeral philosophy — not a future deletion policy (yet). If a "show full history" setting is added later, the filter lives in one place: `routes/messages.ts`.
+
+**Session-based message styling:** `AuthContext` tracks `sessionStartedAt` (epoch ms) in both state and localStorage. It's set on `login()` / `register()` and survives page refreshes (same session). `ChatWindow` uses it to grey out messages from before the current session (pre-session messages get `bg-gray-50 text-gray-400`) and renders a "current session" divider line between the two groups. This means the 24-hour window from the backend may contain messages from a previous login — those appear greyed out rather than hidden.
+
 **ChatWindow keyed by friend ID:** `<ChatWindow key={activeFriend.id} />` in Main.tsx — ensures the component fully remounts (resets scroll, input, history fetch) when switching conversations.
 
 ## Frontend Layout: Tabbed Chat

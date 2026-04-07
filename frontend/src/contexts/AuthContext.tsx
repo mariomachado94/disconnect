@@ -6,6 +6,7 @@ import { authApi } from '../lib/api'
 interface AuthContextValue {
   user: User | null
   token: string | null
+  sessionStartedAt: number | null
   login: (email: string, password: string) => Promise<void>
   register: (email: string, password: string, displayName: string) => Promise<void>
   logout: () => void
@@ -18,6 +19,10 @@ const AuthContext = createContext<AuthContextValue | null>(null)
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [token, setToken] = useState<string | null>(() => localStorage.getItem('token'))
+  const [sessionStartedAt, setSessionStartedAt] = useState<number | null>(() => {
+    const stored = localStorage.getItem('sessionStartedAt')
+    return stored ? parseInt(stored, 10) : null
+  })
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
@@ -36,21 +41,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (email: string, password: string) => {
     const data = await authApi.login(email, password)
+    const now = Date.now()
     localStorage.setItem('token', data.token)
+    localStorage.setItem('sessionStartedAt', String(now))
     setToken(data.token)
+    setSessionStartedAt(now)
     setUser(data.user)
   }, [])
 
   const register = useCallback(async (email: string, password: string, displayName: string) => {
     const data = await authApi.register(email, password, displayName)
+    const now = Date.now()
     localStorage.setItem('token', data.token)
+    localStorage.setItem('sessionStartedAt', String(now))
     setToken(data.token)
+    setSessionStartedAt(now)
     setUser(data.user)
   }, [])
 
   const logout = useCallback(() => {
     localStorage.removeItem('token')
+    localStorage.removeItem('sessionStartedAt')
     setToken(null)
+    setSessionStartedAt(null)
     setUser(null)
   }, [])
 
@@ -59,7 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <AuthContext.Provider value={{ user, token, login, register, logout, updateUser, isLoading }}>
+    <AuthContext.Provider value={{ user, token, sessionStartedAt, login, register, logout, updateUser, isLoading }}>
       {children}
     </AuthContext.Provider>
   )

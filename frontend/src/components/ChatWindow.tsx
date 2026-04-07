@@ -11,7 +11,7 @@ interface Props {
 }
 
 export default function ChatWindow({ friend, onMinimize, onClose }: Props) {
-  const { token, user } = useAuth()
+  const { token, user, sessionStartedAt } = useAuth()
   const { messages, seedConversation, sendMessage, lastFailedRecipient } = useWS()
   const [input, setInput] = useState('')
   const [, setHistoryLoaded] = useState(false)
@@ -78,15 +78,40 @@ export default function ChatWindow({ friend, onMinimize, onClose }: Props) {
               : `Start your conversation with ${friend.displayName}`}
           </p>
         ) : (
-          conversation.map(msg => {
+          conversation.map((msg, idx) => {
             const isMe = msg.fromUserId === user?.id
+            const msgTime = new Date(msg.sentAt).getTime()
+            const isPreSession = sessionStartedAt != null && msgTime < sessionStartedAt
+
+            // Show a divider before the first current-session message
+            const prevMsg = idx > 0 ? conversation[idx - 1] : null
+            const prevIsPreSession = prevMsg && sessionStartedAt != null && new Date(prevMsg.sentAt).getTime() < sessionStartedAt
+            const showDivider = !isPreSession && (idx === 0 || prevIsPreSession)
+
             return (
-              <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-xs px-3 py-1.5 text-sm ${isMe ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-800'}`}>
-                  <p>{msg.content}</p>
-                  <p className={`text-[10px] mt-0.5 ${isMe ? 'text-blue-200' : 'text-gray-400'}`}>
-                    {new Date(msg.sentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </p>
+              <div key={msg.id}>
+                {showDivider && idx > 0 && (
+                  <div className="flex items-center gap-2 my-3">
+                    <div className="flex-1 border-t border-gray-200" />
+                    <span className="text-[10px] text-gray-400 whitespace-nowrap">current session</span>
+                    <div className="flex-1 border-t border-gray-200" />
+                  </div>
+                )}
+                <div className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-xs px-3 py-1.5 text-sm ${
+                    isPreSession
+                      ? 'bg-gray-50 text-gray-400'
+                      : isMe ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-800'
+                  }`}>
+                    <p>{msg.content}</p>
+                    <p className={`text-[10px] mt-0.5 ${
+                      isPreSession
+                        ? 'text-gray-300'
+                        : isMe ? 'text-blue-200' : 'text-gray-400'
+                    }`}>
+                      {new Date(msg.sentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  </div>
                 </div>
               </div>
             )

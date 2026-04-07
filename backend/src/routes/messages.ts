@@ -102,6 +102,9 @@ router.get('/conversation/:friendId', async (req: Request, res: Response) => {
       return res.status(403).json({ error: 'Not friends with this user' });
     }
 
+    // Only return messages from the last 24 hours
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
+
     // Fetch messages
     const messages = await prisma.message.findMany({
       where: {
@@ -109,9 +112,12 @@ router.get('/conversation/:friendId', async (req: Request, res: Response) => {
           { fromUserId: currentUserId, toUserId: friendId },
           { fromUserId: friendId, toUserId: currentUserId },
         ],
-        ...(before && {
-          sentAt: { lt: (await prisma.message.findUnique({ where: { id: before } }))?.sentAt },
-        }),
+        sentAt: {
+          gte: oneDayAgo,
+          ...(before && {
+            lt: (await prisma.message.findUnique({ where: { id: before } }))?.sentAt,
+          }),
+        },
       },
       orderBy: { sentAt: 'desc' },
       take: limit,
