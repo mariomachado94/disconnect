@@ -275,15 +275,17 @@ curl -I http://localhost:3001/uploads/avatars/USER_ID.png
 | Type | Payload | Description |
 |---|---|---|
 | `heartbeat` | _(none)_ | Keep-alive, sent every 2s when user is active |
-| `message` | `recipientId`, `content` | Send a chat message |
+| `message` | `recipientId`, `content`, `clientId` | Send a chat message |
 
 ### Server -> Client
 | Type | Description |
 |---|---|
 | `connected` | Confirmation after successful auth |
-| `message_sent` | Acknowledgement with saved message |
+| `message_sent` | Acknowledgement with saved message (echoes `clientId`) |
 | `message_received` | Incoming message from another user |
-| `message_failed` | Recipient offline or other delivery error |
+| `message_failed` | Recipient offline or other delivery error (echoes `clientId`) |
+| `message_delivered` | Delivery confirmation with `messageId` + `deliveredAt` |
+| `message_read` | Read receipt with `messageId` + `readAt` (last read message) |
 | `presence_change` | Friend went online/away/offline (includes `notify` flag) |
 | `friend_accepted` | Someone accepted your friend request |
 | `friend_request_received` | New incoming friend request |

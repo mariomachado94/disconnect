@@ -313,7 +313,7 @@ export class WebSocketService {
       return;
     }
 
-    const { recipientId, content } = data;
+    const { recipientId, content, clientId } = data;
 
     if (!recipientId || !content?.trim()) {
       this.send(ws, { type: 'error', message: 'Invalid message' });
@@ -345,6 +345,7 @@ export class WebSocketService {
         reason: 'offline',
         recipientId,
         message: 'User is offline',
+        clientId,
       });
       return;
     }
@@ -367,6 +368,7 @@ export class WebSocketService {
     this.send(ws, {
       type: 'message_sent',
       message: savedMessage,
+      clientId,
     });
 
     // Deliver to recipient in real-time — send to all their open tabs
@@ -380,9 +382,17 @@ export class WebSocketService {
       }
 
       // Mark as delivered since recipient received it
+      const deliveredAt = new Date();
       await prisma.message.update({
         where: { id: savedMessage.id },
-        data: { deliveredAt: new Date() },
+        data: { deliveredAt },
+      });
+
+      // Notify sender of delivery (all tabs)
+      this.sendToAllConnections(senderId, {
+        type: 'message_delivered',
+        messageId: savedMessage.id,
+        deliveredAt: deliveredAt.toISOString(),
       });
     }
   }

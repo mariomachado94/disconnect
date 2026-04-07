@@ -48,6 +48,8 @@ Bad candidates: anything derivable by reading the code, git history, or existing
 
 Also update `README.md` if the commit changes anything a developer would need to know: new endpoints (add to the API table + curl example), new environment variables, new npm scripts, changed project structure, new debugging tools, or new troubleshooting scenarios. README.md is the human developer manual — keep it current.
 
+If you encounter edge cases, known limitations, or improvement ideas that are deferred (not blocking the current work), add them to `FUTURE.md` rather than leaving them undocumented.
+
 ## Architecture
 
 ### Backend (`backend/src/`)
@@ -85,9 +87,9 @@ Also update `README.md` if the commit changes anything a developer would need to
 
 **URL:** `ws://localhost:3001/ws?token=<jwt>` (path is `/ws`, auth via query param)
 
-**Client → Server:** `heartbeat`, `message`
+**Client → Server:** `heartbeat`, `message` (includes `clientId` for optimistic matching)
 
-**Server → Client:** `connected`, `message_received`, `message_sent`, `message_failed`, `presence_change` (includes `notify` flag), `friend_accepted`, `friend_request_received`, `heartbeat_ack`, `force_logout`
+**Server → Client:** `connected`, `message_received`, `message_sent` (echoes `clientId`), `message_failed` (echoes `clientId`), `message_delivered` (messageId + deliveredAt), `message_read` (messageId + readAt), `presence_change` (includes `notify` flag), `friend_accepted`, `friend_request_received`, `heartbeat_ack`, `force_logout`
 
 ### StrictMode double-mount pattern
 The frontend uses an `active` flag in the WS `useEffect`. On cleanup, if the socket is still `CONNECTING`, it overrides `ws.onopen = () => ws.close()` instead of calling `ws.close()` directly. This avoids Chrome's "WebSocket closed before connection established" warning.
@@ -95,6 +97,8 @@ The frontend uses an `active` flag in the WS `useEffect`. On cleanup, if the soc
 **Backend: early event handler registration prevents zombie connections.** The `connection` handler registers `ws.on('close', ...)` BEFORE any `await` (like `isBlocklisted()`). This is critical because if the socket closes during an async yield and the close handler isn't registered yet, the event is lost and the socket becomes a zombie in the connection set — never removed, blocking presence transitions forever. The `ws.established` flag (set after `addConnection`) ensures `handleDisconnect` ignores close events for sockets that closed before they were fully set up (e.g. rejected by the blocklist check).
 
 **Post-await `readyState` check prevents a second class of zombie.** Even with early handler registration, StrictMode can still create ghosts: WS1 connects → close handler registered → `await isBlocklisted()` yields → StrictMode cleanup closes WS1 → `handleDisconnect` fires but `established` is false so it's ignored → await resumes → `addConnection` adds the dead socket. The fix: check `ws.readyState !== WebSocket.OPEN` after all awaits, before `addConnection`. If the socket died during the async gap, bail out instead of adding it.
+
+**WS effect depends only on `[token]` — all message handling is inline.** The `onmessage` handler uses `setMessages(prev => ...)` directly instead of external callbacks like `addMessage`. This is deliberate: Vite HMR preserves React state and memoized callbacks but does NOT re-run effects whose deps haven't changed. If the handler closed over `useCallback` helpers, an HMR update to those helpers would be invisible to the running `onmessage` — it would keep executing the old code. Inlining everything and depending only on `[token]` avoids stale closures. The same pattern applies to `logout` (accessed via `logoutRef`) and `user` (via `userRef`).
 
 ## API Response Shapes
 
@@ -145,6 +149,12 @@ The `presenceStatus` field on `AuthenticatedWebSocket` is initialized to `ONLINE
 **`pendingCount` / `pendingSeen` in WSContext:** Lives in WSContext (not ContactList) so the WS message handler can increment it when a `friend_request_received` event arrives.
 
 **Message delivery/read are timestamps, not booleans:** `deliveredAt` and `readAt` are nullable `DateTime` fields. `null` means "not yet delivered/read"; a non-null value is the timestamp when it happened. The old `delivered: true/false` and `read: true/false` booleans no longer exist.
+
+**Delivery/read receipt pipeline:** When a message is delivered to the recipient's WS connections, the backend sets `deliveredAt` and sends `message_delivered` (with `messageId`) back to the sender's connections. When the recipient opens a chat (or receives messages while the chat is open), `POST /api/messages/read/:friendId` fires, which sets `readAt` on all unread messages and sends `message_read` (with the last `messageId`) to the sender. The `message_read` event carries a specific message ID — the frontend marks that message and all earlier sent messages as read. This avoids a race condition where a message sent just before the read event would be incorrectly marked as read.
+
+**Optimistic message rendering with `clientId`:** When the user sends a message, WSContext generates a `clientId` (UUID), inserts an optimistic `Message` with `status: 'pending'` into the conversation immediately, and sends the `clientId` to the backend. The backend echoes `clientId` in `message_sent` / `message_failed` responses. On `message_sent`, the optimistic message is replaced by the real server message (matched by `clientId`). On `message_failed`, the optimistic message is marked `status: 'failed'` and shown inline with a red error indicator. Failed messages are cleared on `seedConversation` (chat reopen).
+
+**`seedConversation` prefers REST data over in-memory:** When merging, REST history (which has current `deliveredAt`/`readAt` from the DB) takes priority over stale in-memory versions. Only WS-only messages (arrived after the REST query) are kept from the existing array. Failed messages are dropped during merge.
 
 **Avatar upload and serving:** Avatars are uploaded via `POST /api/avatar` (multer, 2MB, images only) and stored on disk at `backend/uploads/avatars/{userId}.{ext}`. Served via `express.static` at `/uploads/...`. The `avatarUrl` field on User stores the relative path (e.g. `/uploads/avatars/abc.png`). Frontend prefixes with `VITE_API_URL` when rendering. The `Avatar` component handles the image-or-initials fallback logic — always use it instead of inline initials.
 

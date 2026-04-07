@@ -12,14 +12,14 @@ interface Props {
 
 export default function ChatWindow({ friend, onMinimize, onClose }: Props) {
   const { token, user, sessionStartedAt } = useAuth()
-  const { messages, seedConversation, sendMessage, lastFailedRecipient } = useWS()
+  const { messages, seedConversation, sendMessage } = useWS()
   const [input, setInput] = useState('')
   const [, setHistoryLoaded] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const prevLengthRef = useRef(0)
 
   const conversation: Message[] = messages[friend.id] ?? []
   const isOffline = friend.status === 'offline'
-  const sendFailed = lastFailedRecipient === friend.id
 
   // Load conversation history
   useEffect(() => {
@@ -32,6 +32,18 @@ export default function ChatWindow({ friend, onMinimize, onClose }: Props) {
     })
   }, [friend.id, token, seedConversation])
 
+  // Mark new incoming messages as read while chat is open
+  useEffect(() => {
+    if (!token) return
+    if (conversation.length > prevLengthRef.current) {
+      const newMsgs = conversation.slice(prevLengthRef.current)
+      if (newMsgs.some(m => m.fromUserId === friend.id)) {
+        messagesApi.markRead(friend.id, token).catch(() => {})
+      }
+    }
+    prevLengthRef.current = conversation.length
+  }, [conversation.length, friend.id, token])
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [conversation])
@@ -42,6 +54,24 @@ export default function ChatWindow({ friend, onMinimize, onClose }: Props) {
     if (!content || isOffline) return
     sendMessage(friend.id, content)
     setInput('')
+  }
+
+  // Compute delivery/read label positions (only for my non-failed messages)
+  const myMessages = conversation
+    .map((msg, idx) => ({ msg, idx }))
+    .filter(({ msg }) => msg.fromUserId === user?.id && msg.status !== 'failed')
+
+  let lastReadIdx = -1
+  for (let i = myMessages.length - 1; i >= 0; i--) {
+    if (myMessages[i].msg.readAt) { lastReadIdx = myMessages[i].idx; break }
+  }
+
+  let lastDeliveredIdx = -1
+  for (let i = myMessages.length - 1; i >= 0; i--) {
+    if (myMessages[i].idx <= lastReadIdx) break
+    if (myMessages[i].msg.deliveredAt && !myMessages[i].msg.readAt) {
+      lastDeliveredIdx = myMessages[i].idx; break
+    }
   }
 
   return (
@@ -82,6 +112,7 @@ export default function ChatWindow({ friend, onMinimize, onClose }: Props) {
             const isMe = msg.fromUserId === user?.id
             const msgTime = new Date(msg.sentAt).getTime()
             const isPreSession = sessionStartedAt != null && msgTime < sessionStartedAt
+            const isFailed = isMe && msg.status === 'failed'
 
             // Show a divider before the first current-session message
             const prevMsg = idx > 0 ? conversation[idx - 1] : null
@@ -97,35 +128,41 @@ export default function ChatWindow({ friend, onMinimize, onClose }: Props) {
                     <div className="flex-1 border-t border-gray-200" />
                   </div>
                 )}
-                <div className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                <div className={`flex ${isMe ? 'justify-end' : 'justify-start'} items-end gap-1`}>
                   <div className={`max-w-xs px-3 py-1.5 text-sm ${
                     isPreSession
                       ? 'bg-gray-50 text-gray-400'
-                      : isMe ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-800'
+                      : isFailed
+                        ? 'bg-red-50 text-gray-800'
+                        : isMe ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-800'
                   }`}>
                     <p>{msg.content}</p>
                     <p className={`text-[10px] mt-0.5 ${
                       isPreSession
                         ? 'text-gray-300'
-                        : isMe ? 'text-blue-200' : 'text-gray-400'
+                        : isFailed
+                          ? 'text-red-400'
+                          : isMe ? 'text-blue-200' : 'text-gray-400'
                     }`}>
                       {new Date(msg.sentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </p>
                   </div>
+                  {isFailed && (
+                    <span className="text-red-500 text-xs mb-1 font-bold" title="Message not delivered">!</span>
+                  )}
                 </div>
+                {idx === lastReadIdx && (
+                  <p className="text-[10px] text-gray-400 text-right mt-0.5">Read</p>
+                )}
+                {idx === lastDeliveredIdx && (
+                  <p className="text-[10px] text-gray-400 text-right mt-0.5">Delivered</p>
+                )}
               </div>
             )
           })
         )}
         <div ref={bottomRef} />
       </div>
-
-      {/* Send failed notice */}
-      {sendFailed && (
-        <div className="px-4 py-1 bg-red-50 border-t border-red-200">
-          <p className="text-xs text-red-600">Message not delivered — {friend.displayName} went offline.</p>
-        </div>
-      )}
 
       {/* Input */}
       <div className="border-t border-gray-200 bg-gray-50 px-3 py-2">

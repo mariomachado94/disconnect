@@ -3,6 +3,7 @@ import { body, validationResult } from 'express-validator';
 import { authenticate } from '../middleware/auth';
 import { prisma } from '../utils/prisma';
 import { PresenceService, PresenceStatus } from '../services/presence';
+import { getWsInstance } from '../services/wsInstance';
 
 const router = Router();
 
@@ -146,14 +147,40 @@ router.post('/read/:friendId', async (req: Request, res: Response) => {
     const { friendId } = req.params;
     const currentUserId = req.user!.id;
 
+    // Find the most recent unread message from this friend before updating
+    const lastUnread = await prisma.message.findFirst({
+      where: {
+        fromUserId: friendId,
+        toUserId: currentUserId,
+        readAt: null,
+      },
+      orderBy: { sentAt: 'desc' },
+      select: { id: true },
+    });
+
+    if (!lastUnread) {
+      return res.json({ message: 'No unread messages' });
+    }
+
+    const readAt = new Date();
     await prisma.message.updateMany({
       where: {
         fromUserId: friendId,
         toUserId: currentUserId,
         readAt: null,
       },
-      data: { readAt: new Date() },
+      data: { readAt },
     });
+
+    // Notify the sender that their messages were read
+    const wsService = getWsInstance();
+    if (wsService) {
+      wsService.sendToUser(friendId, {
+        type: 'message_read',
+        messageId: lastUnread.id,
+        readAt: readAt.toISOString(),
+      });
+    }
 
     res.json({ message: 'Messages marked as read' });
   } catch (error) {
