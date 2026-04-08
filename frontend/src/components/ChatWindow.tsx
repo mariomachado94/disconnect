@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { Friend, Message } from '../types'
 import { messagesApi } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
@@ -14,13 +14,19 @@ export default function ChatWindow({ friend, onMinimize, onClose }: Props) {
   const { token, user, sessionStartedAt } = useAuth()
   const { messages, seedConversation, sendMessage } = useWS()
   const [input, setInput] = useState('')
-  const [, setHistoryLoaded] = useState(false)
+  const [historyLoaded, setHistoryLoaded] = useState(false)
+  const scrollRef = useRef<HTMLDivElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const dividerRef = useRef<HTMLDivElement>(null)
+  const spacerDivRef = useRef<HTMLDivElement>(null)
+  const initialScrollDone = useRef(false)
+  const initialSpacerRef = useRef(0)
   const prevLengthRef = useRef(0)
 
   const conversation: Message[] = messages[friend.id] ?? []
   const isOffline = friend.status === 'offline'
   const [missedIds, setMissedIds] = useState<Set<string>>(new Set())
+  const [spacerHeight, setSpacerHeight] = useState(0)
 
   // Load conversation history
   useEffect(() => {
@@ -60,9 +66,55 @@ export default function ChatWindow({ friend, onMinimize, onClose }: Props) {
     prevLengthRef.current = conversation.length
   }, [conversation.length, friend.id, token])
 
+  // Whether all loaded messages are from a previous session (no current-session
+  // messages yet). Used to render the trailing session divider.
+  const allPreSession = historyLoaded && sessionStartedAt != null && conversation.length > 0 &&
+    new Date(conversation[conversation.length - 1].sentAt).getTime() < sessionStartedAt
+
+  useLayoutEffect(() => {
+    if (!historyLoaded) return
+    if (!initialScrollDone.current) {
+      if (dividerRef.current && scrollRef.current && spacerDivRef.current) {
+        // Set spacer height directly in the DOM (no re-render needed before scroll),
+        // then scroll immediately — all before the first paint, no flicker.
+        const initial = scrollRef.current.clientHeight * 0.65
+        initialSpacerRef.current = initial
+        spacerDivRef.current.style.height = `${initial}px`
+        const c = scrollRef.current
+        const dividerOffset =
+          dividerRef.current.getBoundingClientRect().top -
+          c.getBoundingClientRect().top +
+          c.scrollTop
+        c.scrollTop = Math.max(0, dividerOffset - c.clientHeight * 0.35)
+        // Sync React state — DOM already shows the right value so no visible change
+        setSpacerHeight(initial)
+      } else if (scrollRef.current) {
+        // No divider (all current-session messages) — scroll to bottom before paint
+        scrollRef.current.scrollTop = scrollRef.current.scrollHeight - scrollRef.current.clientHeight
+      }
+      return
+    }
+    // Shrink spacer as current-session messages accumulate below the divider
+    if (!initialSpacerRef.current || !dividerRef.current || !bottomRef.current) return
+    const dividerBottom = dividerRef.current.getBoundingClientRect().bottom
+    const bottomTop = bottomRef.current.getBoundingClientRect().top
+    const contentBelowDivider = Math.max(0, bottomTop - dividerBottom)
+    setSpacerHeight(Math.max(0, initialSpacerRef.current - contentBelowDivider))
+  }, [conversation, historyLoaded])
+
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [conversation])
+    if (historyLoaded && !initialScrollDone.current) {
+      initialScrollDone.current = true
+      // Initial scroll fully handled in useLayoutEffect above (before paint).
+      return
+    }
+    if (initialScrollDone.current && scrollRef.current) {
+      scrollRef.current.scrollTo({
+        top: scrollRef.current.scrollHeight - scrollRef.current.clientHeight,
+        behavior: 'smooth',
+      })
+    }
+  }, [conversation, historyLoaded])
 
   function handleSend(e: React.FormEvent) {
     e.preventDefault()
@@ -116,8 +168,8 @@ export default function ChatWindow({ friend, onMinimize, onClose }: Props) {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2 bg-white">
-        {conversation.length === 0 ? (
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-2 bg-white">
+        {!historyLoaded ? null : conversation.length === 0 ? (
           <p className="text-xs text-gray-400 text-center mt-8">
             {isOffline
               ? `${friend.displayName} is offline. Start a conversation when they come online.`
@@ -140,7 +192,7 @@ export default function ChatWindow({ friend, onMinimize, onClose }: Props) {
             return (
               <div key={msg.id}>
                 {showDivider && idx > 0 && (
-                  <div className="flex items-center gap-2 my-3">
+                  <div ref={dividerRef} className="flex items-center gap-2 my-3">
                     <div className="flex-1 border-t border-gray-200" />
                     <span className="text-[10px] text-gray-400 whitespace-nowrap">current session</span>
                     <div className="flex-1 border-t border-gray-200" />
@@ -182,7 +234,18 @@ export default function ChatWindow({ friend, onMinimize, onClose }: Props) {
             )
           })
         )}
+        {/* Trailing session divider: shown when all messages are pre-session */}
+        {historyLoaded && allPreSession && (
+          <div ref={dividerRef} className="flex items-center gap-2 my-3">
+            <div className="flex-1 border-t border-gray-200" />
+            <span className="text-[10px] text-gray-400 whitespace-nowrap">current session</span>
+            <div className="flex-1 border-t border-gray-200" />
+          </div>
+        )}
         <div ref={bottomRef} />
+        {/* Spacer shrinks as current-session messages fill the space.
+            Always rendered so spacerDivRef is available for pre-paint DOM manipulation. */}
+        <div ref={spacerDivRef} style={{ height: spacerHeight, marginTop: 0 }} />
       </div>
 
       {/* Input */}

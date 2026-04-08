@@ -44,6 +44,18 @@ When opening a chat, REST history is merged with any real-time WS messages alrea
 
 **`seedConversation` prefers REST data over in-memory:** REST history (which has current `deliveredAt`/`readAt` from the DB) takes priority over stale in-memory versions. Only WS-only messages (arrived after the REST query) are kept from the existing array. Failed messages are dropped during merge.
 
+## ChatWindow Scroll & Spacer System
+
+When a chat is opened with prior-session history, a "current session" divider is shown and an empty spacer fills the space below it (65% of scroll container height), so the first new message arrives at the top of the visible area rather than the bottom. The spacer shrinks as current-session messages accumulate below the divider.
+
+**All initial scrolls happen in `useLayoutEffect` (before paint).** The divider case (pre-session messages exist) sets the spacer height via direct DOM write on `spacerDivRef`, then sets `scrollTop`, then calls `setSpacerHeight` to sync React state — three steps in one `useLayoutEffect` run. The no-divider case (all current-session messages) does a plain `scrollTop = scrollHeight - clientHeight` in the same effect. Moving any of this to `useEffect` (post-paint) causes a visible scroll flash.
+
+**`historyLoaded` guards the message list from rendering.** WSContext caches messages across chat opens. Without the guard, a reopened chat renders cached messages immediately with `historyLoaded=false`, so `useLayoutEffect` returns early and the messages appear at the wrong scroll position until the API returns. Rendering `null` until `historyLoaded=true` ensures the first paint always shows correctly-scrolled content.
+
+**`initialScrollDone` must be set in `useEffect`, not `useLayoutEffect`.** The flag distinguishes initial load from new-message smooth scrolls. If it were set in `useLayoutEffect`, the `useEffect` would find it true on the same render cycle and fire a redundant smooth scroll over the already-correct initial position.
+
+**Spacer invariant:** While `spacerHeight > 0`, the `useLayoutEffect` shrinks the spacer by exactly the height of new content below the divider, keeping `scrollHeight` constant. So `scrollTo(scrollHeight - clientHeight)` for new messages is a no-op until the spacer is fully consumed — at which point it correctly scrolls to the new max.
+
 ## Session-Based Message Styling
 
 `AuthContext` tracks `sessionStartedAt` (epoch ms) in both state and localStorage. It's set on `login()` / `register()` and survives page refreshes (same session). `ChatWindow` uses it to grey out messages from before the current session (pre-session messages get `bg-gray-50 text-gray-400`) and renders a "current session" divider line between the two groups. This means the 24-hour window from the backend may contain messages from a previous login — those appear greyed out rather than hidden.
