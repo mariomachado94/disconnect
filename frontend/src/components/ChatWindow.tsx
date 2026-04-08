@@ -20,17 +20,33 @@ export default function ChatWindow({ friend, onMinimize, onClose }: Props) {
 
   const conversation: Message[] = messages[friend.id] ?? []
   const isOffline = friend.status === 'offline'
+  const [missedIds, setMissedIds] = useState<Set<string>>(new Set())
 
   // Load conversation history
   useEffect(() => {
     if (!token) return
     setHistoryLoaded(false)
     messagesApi.getConversation(friend.id, token).then(history => {
+      // Identify "missed" messages: sent by the friend before this session,
+      // never read (readAt null). Only detected on first load — markRead below
+      // will set readAt on the backend, so subsequent loads won't flag them.
+      if (sessionStartedAt != null) {
+        const missed = new Set(
+          history
+            .filter(m =>
+              m.fromUserId === friend.id &&
+              new Date(m.sentAt).getTime() < sessionStartedAt &&
+              !m.readAt
+            )
+            .map(m => m.id)
+        )
+        setMissedIds(missed)
+      }
       seedConversation(friend.id, history)
       setHistoryLoaded(true)
       messagesApi.markRead(friend.id, token).catch(() => {})
     })
-  }, [friend.id, token, seedConversation])
+  }, [friend.id, token, seedConversation, sessionStartedAt])
 
   // Mark new incoming messages as read while chat is open
   useEffect(() => {
@@ -112,6 +128,8 @@ export default function ChatWindow({ friend, onMinimize, onClose }: Props) {
             const isMe = msg.fromUserId === user?.id
             const msgTime = new Date(msg.sentAt).getTime()
             const isPreSession = sessionStartedAt != null && msgTime < sessionStartedAt
+            const isMissed = missedIds.has(msg.id)
+            const isGreyedOut = isPreSession && !isMissed
             const isFailed = isMe && msg.status === 'failed'
 
             // Show a divider before the first current-session message
@@ -130,7 +148,7 @@ export default function ChatWindow({ friend, onMinimize, onClose }: Props) {
                 )}
                 <div className={`flex ${isMe ? 'justify-end' : 'justify-start'} items-end gap-1`}>
                   <div className={`max-w-xs px-3 py-1.5 text-sm ${
-                    isPreSession
+                    isGreyedOut
                       ? 'bg-gray-50 text-gray-400'
                       : isFailed
                         ? 'bg-red-50 text-gray-800'
@@ -138,7 +156,7 @@ export default function ChatWindow({ friend, onMinimize, onClose }: Props) {
                   }`}>
                     <p>{msg.content}</p>
                     <p className={`text-[10px] mt-0.5 ${
-                      isPreSession
+                      isGreyedOut
                         ? 'text-gray-300'
                         : isFailed
                           ? 'text-red-400'
@@ -156,6 +174,9 @@ export default function ChatWindow({ friend, onMinimize, onClose }: Props) {
                 )}
                 {idx === lastDeliveredIdx && (
                   <p className="text-[10px] text-gray-400 text-right mt-0.5">Delivered</p>
+                )}
+                {missedIds.has(msg.id) && (
+                  <p className="text-[10px] text-red-400 text-left mt-0.5">Missed</p>
                 )}
               </div>
             )
