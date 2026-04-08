@@ -69,6 +69,15 @@ export const messagesApi = {
     request(`/api/messages/read/${friendId}`, { method: 'POST' }, token),
 }
 
+// Profile
+export const profileApi = {
+  updateDisplayName: (displayName: string, token: string) =>
+    request<{ user: User }>('/api/auth/profile', {
+      method: 'PATCH',
+      body: JSON.stringify({ displayName }),
+    }, token).then(r => r.user),
+}
+
 // Avatar
 export const avatarApi = {
   upload: async (file: File, token: string): Promise<User> => {

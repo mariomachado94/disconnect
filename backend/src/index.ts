@@ -10,6 +10,7 @@ import avatarRoutes from './routes/avatar';
 import { authenticate } from './middleware/auth';
 import { WebSocketService } from './services/websocket';
 import { setWsInstance } from './services/wsInstance';
+import { prisma } from './utils/prisma';
 import './utils/redis'; // Initialize Redis connection
 
 dotenv.config();
@@ -52,6 +53,29 @@ app.get('/api/auth/me', authenticate, async (req, res) => {
       avatarUrl: req.user!.avatarUrl,
     },
   });
+});
+
+app.patch('/api/auth/profile', authenticate, async (req, res) => {
+  const { displayName } = req.body;
+  if (typeof displayName !== 'string' || displayName.trim().length < 1 || displayName.trim().length > 50) {
+    return res.status(400).json({ error: 'Display name must be 1–50 characters' });
+  }
+  try {
+    const user = await prisma.user.update({
+      where: { id: req.user!.id },
+      data: { displayName: displayName.trim() },
+    });
+    res.json({
+      user: {
+        id: user.id,
+        email: user.email,
+        displayName: user.displayName,
+        avatarUrl: user.avatarUrl,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update profile' });
+  }
 });
 
 // Initialize WebSocket server

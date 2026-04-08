@@ -7,6 +7,7 @@ import Avatar from './Avatar'
 import AddFriendModal from './AddFriendModal'
 import PendingRequests from './PendingRequests'
 import AvatarUpload from './AvatarUpload'
+import ProfileSettings from './ProfileSettings'
 
 interface Props {
   selectedFriendId: string | null
@@ -46,6 +47,7 @@ export default function ContactList({ selectedFriendId, onSelectFriend, fullscre
   const [showAddFriend, setShowAddFriend] = useState(false)
   const [showPending, setShowPending] = useState(false)
   const [showAvatarUpload, setShowAvatarUpload] = useState(false)
+  const [showProfileSettings, setShowProfileSettings] = useState(false)
 
   useEffect(() => {
     if (!token) return
@@ -63,10 +65,10 @@ export default function ContactList({ selectedFriendId, onSelectFriend, fullscre
         <button onClick={() => setShowAvatarUpload(true)} className={`rounded ring-2 cursor-pointer ${selfStatus === 'online' ? 'ring-green-500' : 'ring-yellow-400'}`} title="Change avatar">
           <Avatar displayName={user?.displayName ?? ''} avatarUrl={user?.avatarUrl ?? null} size="sm" />
         </button>
-        <div className="flex-1 min-w-0">
+        <button onClick={() => setShowProfileSettings(true)} className="flex-1 min-w-0 text-left cursor-pointer hover:bg-gray-100 rounded px-1 -mx-1">
           <p className="text-xs font-bold text-gray-700 truncate">{user?.displayName}</p>
           <p className="text-xs text-gray-400 truncate">{user?.email}</p>
-        </div>
+        </button>
       </div>
 
       {/* Contact groups */}
@@ -137,6 +139,9 @@ export default function ContactList({ selectedFriendId, onSelectFriend, fullscre
       )}
       {showAvatarUpload && (
         <AvatarUpload onClose={() => setShowAvatarUpload(false)} />
+      )}
+      {showProfileSettings && (
+        <ProfileSettings onClose={() => setShowProfileSettings(false)} />
       )}
     </div>
   )
