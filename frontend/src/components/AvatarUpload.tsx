@@ -32,7 +32,7 @@ export default function AvatarUpload({ onClose }: Props) {
     setError('')
     try {
       const updated = await avatarApi.upload(selectedFile, token)
-      updateUser({ avatarUrl: updated.avatarUrl })
+      updateUser({ avatarUrl: `${updated.avatarUrl}?t=${Date.now()}` })
       onClose()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed')
