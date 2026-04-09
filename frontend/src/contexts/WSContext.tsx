@@ -186,6 +186,18 @@ export function WSProvider({ children }: { children: ReactNode }) {
         if (msg.notify) {
           setLastPresenceChange({ userId: msg.user.id, displayName: msg.user.displayName, status: msg.status })
         }
+      } else if (msg.type === 'profile_updated') {
+        setFriends(prev =>
+          prev.map(f =>
+            f.id === msg.user.id
+              ? {
+                  ...f,
+                  displayName: msg.user.displayName,
+                  avatarUrl: msg.user.avatarUrl ? `${msg.user.avatarUrl}?t=${Date.now()}` : null,
+                }
+              : f
+          )
+        )
       } else if (msg.type === 'friend_accepted') {
         setFriends(prev => [...prev, msg.friend])
       } else if (msg.type === 'friend_request_received') {

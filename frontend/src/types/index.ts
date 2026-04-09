@@ -47,5 +47,6 @@ export type WSMessage =
   | { type: 'presence_change'; user: { id: string; displayName: string; avatarUrl: string | null }; status: 'online' | 'away' | 'offline'; notify: boolean }
   | { type: 'friend_accepted'; friend: Friend }
   | { type: 'friend_request_received'; from: { id: string; displayName: string } }
+  | { type: 'profile_updated'; user: { id: string; displayName: string; avatarUrl: string | null } }
   | { type: 'heartbeat_ack' }
   | { type: 'force_logout'; reason: string }

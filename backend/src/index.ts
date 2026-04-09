@@ -9,7 +9,7 @@ import messagesRoutes from './routes/messages';
 import avatarRoutes from './routes/avatar';
 import { authenticate } from './middleware/auth';
 import { WebSocketService } from './services/websocket';
-import { setWsInstance } from './services/wsInstance';
+import { setWsInstance, getWsInstance } from './services/wsInstance';
 import { prisma } from './utils/prisma';
 import './utils/redis'; // Initialize Redis connection
 
@@ -65,6 +65,9 @@ app.patch('/api/auth/profile', authenticate, async (req, res) => {
       where: { id: req.user!.id },
       data: { displayName: displayName.trim() },
     });
+    const wsService = getWsInstance();
+    if (wsService) await wsService.notifyFriendsProfileUpdate(req.user!.id);
+
     res.json({
       user: {
         id: user.id,

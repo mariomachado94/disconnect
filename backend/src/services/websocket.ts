@@ -603,4 +603,27 @@ export class WebSocketService {
   sendToUser(userId: string, data: any) {
     this.sendToAllConnections(userId, data);
   }
+
+  async notifyFriendsProfileUpdate(userId: string) {
+    const friendships = await prisma.friendship.findMany({
+      where: {
+        OR: [
+          { userId, status: 'ACCEPTED' },
+          { friendId: userId, status: 'ACCEPTED' },
+        ],
+      },
+    });
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, displayName: true, avatarUrl: true },
+    });
+
+    if (!user) return;
+
+    for (const friendship of friendships) {
+      const friendId = friendship.userId === userId ? friendship.friendId : friendship.userId;
+      this.sendToAllConnections(friendId, { type: 'profile_updated', user });
+    }
+  }
 }

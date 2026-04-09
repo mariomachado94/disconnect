@@ -86,7 +86,7 @@ If you encounter edge cases, known limitations, or improvement ideas that are de
 
 **Client → Server:** `heartbeat`, `message` (includes `clientId` for optimistic matching)
 
-**Server → Client:** `connected`, `message_received`, `message_sent` (echoes `clientId`), `message_failed` (echoes `clientId`), `message_delivered` (messageId + deliveredAt), `message_read` (messageId + readAt), `presence_change` (includes `notify` flag), `friend_accepted`, `friend_request_received`, `heartbeat_ack`, `force_logout`
+**Server → Client:** `connected`, `message_received`, `message_sent` (echoes `clientId`), `message_failed` (echoes `clientId`), `message_delivered` (messageId + deliveredAt), `message_read` (messageId + readAt), `presence_change` (includes `notify` flag), `friend_accepted`, `friend_request_received`, `profile_updated` (id + displayName + avatarUrl), `heartbeat_ack`, `force_logout`
 
 ## API Response Shapes
 

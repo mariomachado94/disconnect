@@ -4,6 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import { authenticate } from '../middleware/auth';
 import { prisma } from '../utils/prisma';
+import { getWsInstance } from '../services/wsInstance';
 
 const router = Router();
 router.use(authenticate);
@@ -56,6 +57,9 @@ router.post('/', upload.single('avatar'), async (req: Request, res: Response) =>
       where: { id: req.user!.id },
       data: { avatarUrl },
     });
+
+    const wsService = getWsInstance();
+    if (wsService) await wsService.notifyFriendsProfileUpdate(req.user!.id);
 
     res.json({
       user: {
