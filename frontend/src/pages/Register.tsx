@@ -28,7 +28,8 @@ export default function Register() {
   return (
     <div className="min-h-screen bg-gray-100 flex items-center justify-center">
       <div className="bg-white border border-gray-300 w-80 p-6">
-        <h1 className="text-lg font-bold text-center mb-1 text-gray-800">Disconnect</h1>
+        <h1 className="text-lg font-bold text-center mb-0.5 text-gray-800">Disconnect</h1>
+        <p className="text-xs text-center text-gray-400 mb-4">Messaging starts with presence</p>
         <p className="text-xs text-center text-gray-500 mb-5">Create your account</p>
 
         <form onSubmit={handleSubmit} className="space-y-3">
