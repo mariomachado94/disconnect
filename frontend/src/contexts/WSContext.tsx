@@ -60,8 +60,8 @@ export function WSProvider({ children }: { children: ReactNode }) {
     // Mirror the backend's 30s away threshold locally so the UI can reflect it
     const statusCheck = setInterval(() => {
       const idleMs = Date.now() - lastActivityRef.current
-      setSelfStatus(idleMs < 30_000 ? 'online' : 'away')
-    }, 2_000)
+      setSelfStatus(idleMs < 60_000 ? 'online' : 'away')
+    }, 500)
     return () => {
       window.removeEventListener('mousemove', markActive)
       window.removeEventListener('keydown', markActive)
@@ -86,13 +86,13 @@ export function WSProvider({ children }: { children: ReactNode }) {
       setIsConnected(true)
       heartbeatRef.current = setInterval(() => {
         if (ws.readyState !== WebSocket.OPEN) return
-        // Only report activity if the user has interacted in the last 2s.
+        // Only report activity if the user has interacted in the last 500ms.
         // If they haven't, skip — the backend will transition them to away/offline.
         const idleMs = Date.now() - lastActivityRef.current
-        if (idleMs < 2_000) {
+        if (idleMs < 500) {
           ws.send(JSON.stringify({ type: 'heartbeat' }))
         }
-      }, 2_000)
+      }, 500)
     }
 
     ws.onclose = () => {

@@ -62,7 +62,9 @@ When a chat is opened with prior-session history, a "current session" divider is
 
 ## Activity-Aware Heartbeat
 
-WSContext tracks real user activity (`mousemove`, `keydown`, `click`) via `lastActivityRef`. The heartbeat interval fires every 2 s but only sends a heartbeat to the server if the user was active in the last 2 s. If the user is idle, the heartbeat is skipped — allowing the backend's presence monitor to detect inactivity and transition the user to away/offline. Without this, the heartbeat alone would keep resetting `lastSeen` and the away/offline states would never trigger.
+WSContext tracks real user activity (`mousemove`, `keydown`, `click`, `scroll`) via `lastActivityRef`. The heartbeat interval fires every 500 ms but only sends a heartbeat to the server if the user was active in the last 500 ms. If the user is idle, the heartbeat is skipped — allowing the backend's presence monitor to detect inactivity and transition the user to away/offline. Without this, the heartbeat alone would keep resetting `lastSeen` and the away/offline states would never trigger.
+
+A separate 500 ms `statusCheck` interval mirrors the backend's away threshold locally (`idleMs < 60_000`) to drive the yellow away overlay in `Main.tsx`. **This threshold must match `AWAY_TIMEOUT` in `backend/src/services/presence.ts`** — if they diverge, the overlay will fire at the wrong time relative to what friends see.
 
 ## `force_logout` Handling
 

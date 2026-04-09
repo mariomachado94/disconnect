@@ -14,7 +14,7 @@ This file documents non-obvious backend behaviors. For architecture overview, co
 
 ## Presence System
 
-**Presence is ephemeral:** Redis only, cleared on server restart. Status is computed from `lastSeen`: 0–30 s → online, 30–90 s → away, 90 s+ → offline. (Thresholds are reduced for testing — production values were 5/15 min.) `PresenceService.clearAll()` runs on startup inside a try/catch so a Redis hiccup at boot doesn't crash the server.
+**Presence is ephemeral:** Redis only, cleared on server restart. Status is computed from `lastSeen`: 0–60 s → online, 60–120 s → away, 120 s+ → offline. Thresholds live in `AWAY_TIMEOUT` / `LOGOUT_TIMEOUT` constants at the top of `presence.ts`. **The frontend mirrors the away threshold** (`60_000` in `WSContext.tsx`) to drive the local away overlay — if you change `AWAY_TIMEOUT` here, update the frontend constant too, or the overlay will fire at the wrong time. `PresenceService.clearAll()` runs on startup inside a try/catch so a Redis hiccup at boot doesn't crash the server.
 
 **Active presence monitoring — `startPresenceMonitor()`:** Called once from `initialize()`. Runs a `setInterval` every 1 second that iterates unique userIds in the connections map, calls `PresenceService.getPresence(userId)` to read the computed status from Redis, and compares it to `ws.presenceStatus` on the first socket (all sockets for a user share the same logical state). If the status changed, it updates `presenceStatus` on ALL sockets for that user and fires the appropriate transition:
 - `ONLINE → AWAY`: logs, notifies friends via `notifyFriendsPresenceChange`.
@@ -36,7 +36,7 @@ When the *last* connection for a user closes, `handleDisconnect` does NOT mark t
 
 **Disconnect-based token blocklist:** When a user's WebSocket disconnects, `handleDisconnect` starts a 90-second timer (`forceReloginTimers`). If the user reconnects within 90s, the timer is cancelled in the connection handler. If not, the JWT is added to a Redis blocklist (`TokenBlocklist.blocklist()`) with a TTL equal to the token's remaining lifetime. The auth middleware and WS connection handler both check `TokenBlocklist.isBlocklisted()` — a blocklisted token returns 401 / closes the socket. This means closing the browser for >90s requires re-login. Network blips and page refreshes (sub-second reconnects) are unaffected. The `forceReloginTimers` map is in-memory; lost on server restart, which is acceptable since all WS connections are also dropped.
 
-**JWT expiry is 1 day** (not 7). With the 90s disconnect/inactivity force-logout, a 7-day token was oversized. 1 day limits blocklist storage and reduces exposure if a token is stolen. Blocklist TTL is derived from the token's `exp` claim, so entries self-clean.
+**JWT expiry is 1 day** (not 7). With the 120s inactivity force-logout, a 7-day token was oversized. 1 day limits blocklist storage and reduces exposure if a token is stolen. Blocklist TTL is derived from the token's `exp` claim, so entries self-clean.
 
 ## Delivery/Read Receipt Pipeline
 
