@@ -56,6 +56,7 @@ export function WSProvider({ children }: { children: ReactNode }) {
     window.addEventListener('mousemove', markActive)
     window.addEventListener('keydown', markActive)
     window.addEventListener('click', markActive)
+    window.addEventListener('scroll', markActive, true)
     // Mirror the backend's 30s away threshold locally so the UI can reflect it
     const statusCheck = setInterval(() => {
       const idleMs = Date.now() - lastActivityRef.current
@@ -65,6 +66,7 @@ export function WSProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('mousemove', markActive)
       window.removeEventListener('keydown', markActive)
       window.removeEventListener('click', markActive)
+      window.removeEventListener('scroll', markActive, true)
       clearInterval(statusCheck)
     }
   }, [])

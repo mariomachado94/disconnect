@@ -12,7 +12,7 @@ import { playNotification, playFriendOnline } from '../lib/sound'
 let toastIdCounter = 0
 
 export default function Main() {
-  const { friends, lastIncoming, lastPresenceChange } = useWS()
+  const { friends, lastIncoming, lastPresenceChange, selfStatus } = useWS()
   const [openTabIds, setOpenTabIds] = useState<string[]>([])
   const [activeTabId, setActiveTabId] = useState<string | null>(null)
   const [unreadIds, setUnreadIds] = useState<Set<string>>(new Set())
@@ -124,6 +124,10 @@ export default function Main() {
       )}
 
       <ToastContainer toasts={toasts} />
+
+      {selfStatus === 'away' && (
+        <div className="fixed inset-0 bg-yellow-400/30 pointer-events-none" />
+      )}
     </div>
   )
 }
