@@ -30,7 +30,7 @@ interface ContactItemProps {
 function ContactItem({ friend, isSelected, onSelect }: ContactItemProps) {
   return (
     <button
-      onClick={() => onSelect(friend)}
+      onDoubleClick={() => onSelect(friend)}
       className={`w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-blue-50 cursor-pointer ${isSelected ? 'bg-blue-100' : ''}`}
     >
       {statusDot(friend.status)}

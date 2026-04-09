@@ -110,7 +110,6 @@ export default function Main() {
         activeId={activeTabId}
         unreadIds={unreadIds}
         onSwitch={handleSwitchTab}
-        onClose={handleCloseTab}
       />
 
       {activeFriend && (

@@ -149,7 +149,7 @@ export default function ChatWindow({ friend, onMinimize, onClose }: Props) {
         <div className={`w-2 h-2 rounded-full ${friend.status === 'online' ? 'bg-green-500' : friend.status === 'away' ? 'bg-yellow-400' : 'bg-gray-300'}`} />
         <span className="text-sm font-semibold text-gray-800">{friend.displayName}</span>
         <span className="text-xs text-gray-400 capitalize">{friend.status}</span>
-        <div className="ml-auto flex items-center gap-1">
+        <div className="ml-auto flex items-center gap-3">
           <button
             onClick={onMinimize}
             className="text-gray-400 hover:text-gray-600 text-lg leading-none cursor-pointer"

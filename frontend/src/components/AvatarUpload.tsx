@@ -66,17 +66,17 @@ export default function AvatarUpload({ onClose }: Props) {
 
         <div className="flex gap-2">
           <button
+            onClick={onClose}
+            className="flex-1 bg-gray-100 text-gray-600 text-xs py-1.5 rounded hover:bg-gray-200 cursor-pointer"
+          >
+            Cancel
+          </button>
+          <button
             onClick={handleUpload}
             disabled={!selectedFile || uploading}
             className="flex-1 bg-blue-600 text-white text-xs py-1.5 rounded hover:bg-blue-700 disabled:opacity-40 cursor-pointer"
           >
             {uploading ? 'Uploading...' : 'Upload'}
-          </button>
-          <button
-            onClick={onClose}
-            className="flex-1 bg-gray-100 text-gray-600 text-xs py-1.5 rounded hover:bg-gray-200 cursor-pointer"
-          >
-            Cancel
           </button>
         </div>
       </div>
