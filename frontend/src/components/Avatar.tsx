@@ -25,7 +25,7 @@ export default function Avatar({ displayName, avatarUrl, size = 'sm', className 
   if (avatarUrl) {
     return (
       <img
-        src={`${API_URL}${avatarUrl}`}
+        src={avatarUrl.startsWith('http') ? avatarUrl : `${API_URL}${avatarUrl}`}
         alt={displayName}
         className={`${sizeClass} rounded object-cover shrink-0 ${className}`}
       />

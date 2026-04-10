@@ -1,31 +1,16 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import multer from 'multer';
 import path from 'path';
-import fs from 'fs';
+import { PutObjectCommand, DeleteObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { authenticate } from '../middleware/auth';
 import { prisma } from '../utils/prisma';
 import { getWsInstance } from '../services/wsInstance';
+import { r2, R2_BUCKET } from '../lib/r2';
 
 const router = Router();
-router.use(authenticate);
-
-const UPLOAD_DIR = path.join(__dirname, '../../uploads/avatars');
-
-// Ensure directory exists
-if (!fs.existsSync(UPLOAD_DIR)) {
-  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-}
-
-const storage = multer.diskStorage({
-  destination: UPLOAD_DIR,
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase() || '.png';
-    cb(null, `${req.user!.id}${ext}`);
-  },
-});
 
 const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 2 * 1024 * 1024 }, // 2MB
   fileFilter: (_req, file, cb) => {
     const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
@@ -37,6 +22,25 @@ const upload = multer({
   },
 });
 
+// Proxy avatar file from storage (public, no auth)
+router.get('/file/*key', async (req: Request, res: Response) => {
+  const key = req.path.slice('/file/'.length);
+  try {
+    const { Body, ContentType } = await r2.send(new GetObjectCommand({ Bucket: R2_BUCKET, Key: key }));
+    const bytes = await Body!.transformToByteArray();
+    console.log(`[avatar proxy] key=${key} contentType=${ContentType} bytes=${bytes.length}`);
+    res.setHeader('Content-Type', ContentType || 'image/jpeg');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.send(Buffer.from(bytes));
+  } catch (err) {
+    console.error(`[avatar proxy] key=${key} error:`, err);
+    res.status(404).end();
+  }
+});
+
+router.use(authenticate);
+
 // Upload avatar
 router.post('/', upload.single('avatar'), async (req: Request, res: Response) => {
   try {
@@ -44,22 +48,35 @@ router.post('/', upload.single('avatar'), async (req: Request, res: Response) =>
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
-    const avatarUrl = `/uploads/avatars/${req.file.filename}`;
+    const userId = req.user!.id;
+    const ext = path.extname(req.file.originalname).toLowerCase() || '.png';
+    const key = `avatars/${userId}${ext}`;
 
-    // Delete old avatar if it has a different filename
-    const currentUser = await prisma.user.findUnique({ where: { id: req.user!.id } });
-    if (currentUser?.avatarUrl && currentUser.avatarUrl !== avatarUrl) {
-      const oldPath = path.join(__dirname, '../../', currentUser.avatarUrl);
-      if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+    // Delete old avatar from storage if extension changed
+    const currentUser = await prisma.user.findUnique({ where: { id: userId } });
+    if (currentUser?.avatarUrl) {
+      const oldKey = currentUser.avatarUrl.replace('/api/avatar/file/', '');
+      if (oldKey !== key) {
+        await r2.send(new DeleteObjectCommand({ Bucket: R2_BUCKET, Key: oldKey })).catch(() => {});
+      }
     }
 
+    await r2.send(new PutObjectCommand({
+      Bucket: R2_BUCKET,
+      Key: key,
+      Body: req.file.buffer,
+      ContentType: req.file.mimetype,
+    }));
+
+    const avatarUrl = `/api/avatar/file/${key}`;
+
     const user = await prisma.user.update({
-      where: { id: req.user!.id },
+      where: { id: userId },
       data: { avatarUrl },
     });
 
     const wsService = getWsInstance();
-    if (wsService) await wsService.notifyFriendsProfileUpdate(req.user!.id);
+    if (wsService) await wsService.notifyFriendsProfileUpdate(userId);
 
     res.json({
       user: {

@@ -2,7 +2,6 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import http from 'http';
-import path from 'path';
 import authRoutes from './routes/auth';
 import friendsRoutes from './routes/friends';
 import messagesRoutes from './routes/messages';
@@ -24,7 +23,7 @@ const server = http.createServer(app);
 // Middleware
 app.use(cors());
 app.use(express.json());
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+// Avatars are served from Cloudflare R2 (no local static file serving)
 
 // Health check
 app.get('/health', (req, res) => {
