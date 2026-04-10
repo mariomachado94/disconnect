@@ -14,9 +14,17 @@ function getCtx(): AudioContext {
 }
 
 // Call this once on any early user interaction (click, keydown, etc.) to unlock audio in Safari.
+// Desktop Safari: creating + resuming the AudioContext within a gesture is enough.
+// iOS Safari: you must also *start playback* within the gesture — a silent one-sample buffer
+// does the job without producing any audible output.
 export function unlockAudio() {
   try {
-    getCtx()
+    const ctx = getCtx()
+    const buf = ctx.createBuffer(1, 1, 22050)
+    const src = ctx.createBufferSource()
+    src.buffer = buf
+    src.connect(ctx.destination)
+    src.start(0)
   } catch {
     // Ignore — will retry on next call
   }
