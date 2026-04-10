@@ -28,13 +28,11 @@ router.get('/file/*key', async (req: Request, res: Response) => {
   try {
     const { Body, ContentType } = await r2.send(new GetObjectCommand({ Bucket: R2_BUCKET, Key: key }));
     const bytes = await Body!.transformToByteArray();
-    console.log(`[avatar proxy] key=${key} contentType=${ContentType} bytes=${bytes.length}`);
     res.setHeader('Content-Type', ContentType || 'image/jpeg');
     res.setHeader('Cache-Control', 'public, max-age=86400');
     res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     res.send(Buffer.from(bytes));
-  } catch (err) {
-    console.error(`[avatar proxy] key=${key} error:`, err);
+  } catch {
     res.status(404).end();
   }
 });

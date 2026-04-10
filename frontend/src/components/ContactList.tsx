@@ -102,11 +102,11 @@ export default function ContactList({ selectedFriendId, onSelectFriend, fullscre
       <div className="border-t border-gray-200 p-2 space-y-1">
         <button
           onClick={() => { setShowPending(true); setPendingSeen(true) }}
-          className="w-full flex items-center justify-between px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 cursor-pointer"
+          className="w-full flex items-center px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 cursor-pointer"
         >
           <span>Friend Requests</span>
           {pendingCount > 0 && (
-            <span className={`rounded-full px-1.5 py-0.5 text-[10px] text-white ${pendingSeen ? 'bg-gray-400' : 'bg-red-500'}`}>
+            <span className={`ml-1.5 rounded-full px-1.5 py-0.5 text-[10px] text-white ${pendingSeen ? 'bg-gray-400' : 'bg-red-500'}`}>
               {pendingCount}
             </span>
           )}

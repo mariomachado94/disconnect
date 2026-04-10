@@ -3,6 +3,7 @@ import type { FriendRequest } from '../types'
 import { friendsApi } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import { useWS } from '../contexts/WSContext'
+import Avatar from './Avatar'
 
 interface Props {
   onClose: () => void
@@ -56,23 +57,26 @@ export default function PendingRequests({ onClose }: Props) {
         ) : (
           <ul className="space-y-2">
             {requests.map(req => (
-              <li key={req.id} className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-800">{req.from.displayName}</p>
-                  <p className="text-xs text-gray-500">{req.from.email}</p>
+              <li key={req.id} className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-2">
+                  <Avatar displayName={req.from.displayName} avatarUrl={req.from.avatarUrl} size="sm" />
+                  <div>
+                    <p className="text-sm font-medium text-gray-800">{req.from.displayName}</p>
+                    <p className="text-xs text-gray-500">{req.from.email}</p>
+                  </div>
                 </div>
                 <div className="flex gap-1">
-                  <button
-                    onClick={() => accept(req)}
-                    className="bg-green-600 text-white text-xs px-2 py-1 hover:bg-green-700 cursor-pointer"
-                  >
-                    Accept
-                  </button>
                   <button
                     onClick={() => reject(req)}
                     className="bg-gray-200 text-gray-700 text-xs px-2 py-1 hover:bg-gray-300 cursor-pointer"
                   >
                     Reject
+                  </button>
+                  <button
+                    onClick={() => accept(req)}
+                    className="bg-green-600 text-white text-xs px-2 py-1 hover:bg-green-700 cursor-pointer"
+                  >
+                    Accept
                   </button>
                 </div>
               </li>
