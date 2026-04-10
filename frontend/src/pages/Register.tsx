@@ -39,7 +39,7 @@ export default function Register() {
               type="text"
               value={displayName}
               onChange={e => setDisplayName(e.target.value)}
-              className="w-full border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:border-blue-500"
+              className="w-full border border-gray-300 px-2 py-1.5 text-base focus:outline-none focus:border-blue-500"
               required
               autoFocus
             />
@@ -50,7 +50,7 @@ export default function Register() {
               type="email"
               value={email}
               onChange={e => setEmail(e.target.value)}
-              className="w-full border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:border-blue-500"
+              className="w-full border border-gray-300 px-2 py-1.5 text-base focus:outline-none focus:border-blue-500"
               required
             />
           </div>
@@ -60,7 +60,7 @@ export default function Register() {
               type="password"
               value={password}
               onChange={e => setPassword(e.target.value)}
-              className="w-full border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:border-blue-500"
+              className="w-full border border-gray-300 px-2 py-1.5 text-base focus:outline-none focus:border-blue-500"
               required
               minLength={8}
             />
