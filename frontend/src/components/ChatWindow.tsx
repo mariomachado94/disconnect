@@ -260,7 +260,8 @@ export default function ChatWindow({ friend, onMinimize, onClose }: Props) {
               value={input}
               onChange={e => setInput(e.target.value)}
               placeholder={`Message ${friend.displayName}...`}
-              className="flex-1 border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:border-blue-500 bg-white"
+              className="flex-1 border border-gray-300 px-3 py-1.5 text-base focus:outline-none focus:border-blue-500 bg-white"
+              enterKeyHint="send"
               autoFocus
             />
             <button
