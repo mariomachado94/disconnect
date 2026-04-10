@@ -58,11 +58,11 @@ export default function PendingRequests({ onClose }: Props) {
           <ul className="space-y-2">
             {requests.map(req => (
               <li key={req.id} className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 min-w-0">
                   <Avatar displayName={req.from.displayName} avatarUrl={req.from.avatarUrl} size="sm" />
-                  <div>
-                    <p className="text-sm font-medium text-gray-800">{req.from.displayName}</p>
-                    <p className="text-xs text-gray-500">{req.from.email}</p>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-800 break-words" title={req.from.displayName}>{req.from.displayName}</p>
+                    <p className="text-xs text-gray-500 break-all" title={req.from.email}>{req.from.email}</p>
                   </div>
                 </div>
                 <div className="flex gap-1">
