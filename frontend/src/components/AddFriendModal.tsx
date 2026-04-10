@@ -51,7 +51,7 @@ export default function AddFriendModal({ onClose, onRequestSent }: Props) {
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 placeholder="friend@example.com"
-                className="w-full border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:border-blue-500"
+                className="w-full border border-gray-300 px-2 py-1.5 text-base focus:outline-none focus:border-blue-500"
                 required
                 autoFocus
               />
