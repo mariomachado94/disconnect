@@ -9,6 +9,11 @@ export interface PresenceChange {
   status: 'online' | 'away' | 'offline'
 }
 
+export interface FriendRequestFrom {
+  id: string
+  displayName: string
+}
+
 interface WSContextValue {
   friends: Friend[]
   setFriends: React.Dispatch<React.SetStateAction<Friend[]>>
@@ -17,6 +22,7 @@ interface WSContextValue {
   sendMessage: (recipientId: string, content: string) => void
   lastIncoming: Message | null
   lastPresenceChange: PresenceChange | null
+  lastFriendRequest: FriendRequestFrom | null
   isConnected: boolean
   selfStatus: 'online' | 'away'
   pendingCount: number
@@ -35,6 +41,7 @@ export function WSProvider({ children }: { children: ReactNode }) {
   const [messages, setMessages] = useState<Record<string, Message[]>>({})
   const [lastIncoming, setLastIncoming] = useState<Message | null>(null)
   const [lastPresenceChange, setLastPresenceChange] = useState<PresenceChange | null>(null)
+  const [lastFriendRequest, setLastFriendRequest] = useState<FriendRequestFrom | null>(null)
   const [isConnected, setIsConnected] = useState(false)
   const [pendingCount, setPendingCount] = useState(0)
   const [pendingSeen, setPendingSeen] = useState(false)
@@ -205,6 +212,7 @@ export function WSProvider({ children }: { children: ReactNode }) {
       } else if (msg.type === 'friend_request_received') {
         setPendingCount(prev => prev + 1)
         setPendingSeen(false)
+        setLastFriendRequest(msg.from)
       } else if (msg.type === 'force_logout') {
         logoutRef.current()
       }
@@ -269,7 +277,7 @@ export function WSProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <WSContext.Provider value={{ friends, setFriends, messages, seedConversation, sendMessage, lastIncoming, lastPresenceChange, isConnected, selfStatus, pendingCount, setPendingCount, pendingSeen, setPendingSeen }}>
+    <WSContext.Provider value={{ friends, setFriends, messages, seedConversation, sendMessage, lastIncoming, lastPresenceChange, lastFriendRequest, isConnected, selfStatus, pendingCount, setPendingCount, pendingSeen, setPendingSeen }}>
       {children}
     </WSContext.Provider>
   )

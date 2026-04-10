@@ -7,12 +7,12 @@ import TabStrip from '../components/TabStrip'
 import ToastContainer from '../components/ToastContainer'
 import type { Toast } from '../components/ToastContainer'
 import { useWS } from '../contexts/WSContext'
-import { playNotification, playFriendOnline } from '../lib/sound'
+import { playNotification, playFriendOnline, playFriendRequest } from '../lib/sound'
 
 let toastIdCounter = 0
 
 export default function Main() {
-  const { friends, lastIncoming, lastPresenceChange, selfStatus } = useWS()
+  const { friends, lastIncoming, lastPresenceChange, lastFriendRequest, selfStatus } = useWS()
   const [openTabIds, setOpenTabIds] = useState<string[]>([])
   const [activeTabId, setActiveTabId] = useState<string | null>(null)
   const [unreadIds, setUnreadIds] = useState<Set<string>>(new Set())
@@ -44,6 +44,7 @@ export default function Main() {
   // Guards against StrictMode double-firing effects (same event processed twice)
   const lastProcessedIncoming = useRef<Message | null>(null)
   const lastProcessedPresence = useRef<PresenceChange | null>(null)
+  const lastProcessedFriendRequest = useRef<typeof lastFriendRequest>(null)
 
   // React to incoming messages: open tab, mark unread, play sound, show toast
   useEffect(() => {
@@ -66,6 +67,14 @@ export default function Main() {
     playFriendOnline()
     addToast('friend-online', lastPresenceChange.displayName)
   }, [lastPresenceChange, addToast])
+
+  // React to incoming friend requests: play sound, show toast
+  useEffect(() => {
+    if (!lastFriendRequest || lastFriendRequest === lastProcessedFriendRequest.current) return
+    lastProcessedFriendRequest.current = lastFriendRequest
+    playFriendRequest()
+    addToast('friend-request', lastFriendRequest.displayName)
+  }, [lastFriendRequest, addToast])
 
   const activeFriend = friends.find(f => f.id === activeTabId) ?? null
   const openTabs = openTabIds.map(id => friends.find(f => f.id === id)).filter(Boolean) as Friend[]

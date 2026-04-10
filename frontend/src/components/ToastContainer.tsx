@@ -1,6 +1,6 @@
 export interface Toast {
   id: number
-  kind: 'friend-online' | 'new-message'
+  kind: 'friend-online' | 'new-message' | 'friend-request'
   displayName: string
   exiting: boolean
 }
@@ -22,6 +22,14 @@ export default function ToastContainer({ toasts }: { toasts: Toast[] }) {
               <div className="text-sm">
                 <span className="font-medium text-gray-900">{toast.displayName}</span>
                 <span className="text-gray-500"> is now online</span>
+              </div>
+            </>
+          ) : toast.kind === 'friend-request' ? (
+            <>
+              <span className="w-2.5 h-2.5 rounded-full bg-red-500 shrink-0" />
+              <div className="text-sm">
+                <span className="text-gray-500">Friend request from </span>
+                <span className="font-medium text-gray-900">{toast.displayName}</span>
               </div>
             </>
           ) : (

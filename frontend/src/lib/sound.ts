@@ -54,6 +54,31 @@ export function playFriendOnline() {
   }
 }
 
+// Gentle double-knock for friend requests — like someone tapping at the door asking to be let in
+export function playFriendRequest() {
+  try {
+    const ctx = getCtx()
+
+    // Two soft knocks: low sine bursts with fast decay, spaced 220ms apart
+    for (let i = 0; i < 2; i++) {
+      const t = ctx.currentTime + i * 0.22
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+      osc.type = 'sine'
+      osc.frequency.value = 320
+      gain.gain.setValueAtTime(0.0, t)
+      gain.gain.linearRampToValueAtTime(0.12, t + 0.012) // quick tap attack
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.11) // soft decay
+      osc.start(t)
+      osc.stop(t + 0.11)
+    }
+  } catch {
+    // AudioContext unavailable or blocked
+  }
+}
+
 // Sharp two-tone chirp for incoming messages
 export function playNotification() {
   try {
