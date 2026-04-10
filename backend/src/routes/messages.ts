@@ -141,6 +141,29 @@ router.get('/conversation/:friendId', async (req: Request, res: Response) => {
   }
 });
 
+// Get IDs of friends who have sent unread messages (for startup tab restoration)
+router.get('/unread-senders', async (req: Request, res: Response) => {
+  try {
+    const currentUserId = req.user!.id;
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+    const rows = await prisma.message.findMany({
+      where: {
+        toUserId: currentUserId,
+        readAt: null,
+        sentAt: { gte: oneDayAgo },
+      },
+      select: { fromUserId: true },
+      distinct: ['fromUserId'],
+    });
+
+    res.json({ senderIds: rows.map(r => r.fromUserId) });
+  } catch (error) {
+    console.error('Unread senders error:', error);
+    res.status(500).json({ error: 'Failed to get unread senders' });
+  }
+});
+
 // Mark messages as read
 router.post('/read/:friendId', async (req: Request, res: Response) => {
   try {

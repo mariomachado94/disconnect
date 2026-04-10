@@ -7,11 +7,14 @@ import TabStrip from '../components/TabStrip'
 import ToastContainer from '../components/ToastContainer'
 import type { Toast } from '../components/ToastContainer'
 import { useWS } from '../contexts/WSContext'
+import { useAuth } from '../contexts/AuthContext'
+import { messagesApi } from '../lib/api'
 import { playNotification, playFriendOnline, playFriendRequest } from '../lib/sound'
 
 let toastIdCounter = 0
 
 export default function Main() {
+  const { token } = useAuth()
   const { friends, lastIncoming, lastPresenceChange, lastFriendRequest, selfStatus } = useWS()
   const [openTabIds, setOpenTabIds] = useState<string[]>([])
   const [activeTabId, setActiveTabId] = useState<string | null>(null)
@@ -34,8 +37,30 @@ export default function Main() {
     }, 3800)
   }, [])
 
-  // Remove tabs for friends that are no longer in the friends list
+  // On startup, open tabs for any friends with unread messages from the last session.
+  // Runs once per mount (after token is available). The friends-cleanup effect below
+  // guards against friends = [] so it won't immediately wipe these tab IDs on load.
+  const startupUnreadChecked = useRef(false)
   useEffect(() => {
+    if (!token || startupUnreadChecked.current) return
+    startupUnreadChecked.current = true
+    messagesApi.getUnreadSenders(token).then(senderIds => {
+      if (senderIds.length === 0) return
+      setOpenTabIds(prev => {
+        const next = [...prev]
+        for (const id of senderIds) {
+          if (!next.includes(id)) next.push(id)
+        }
+        return next
+      })
+      setUnreadIds(prev => new Set([...prev, ...senderIds]))
+    })
+  }, [token])
+
+  // Remove tabs for friends that are no longer in the friends list.
+  // Guard against friends = [] (not yet loaded) to avoid wiping startup tabs.
+  useEffect(() => {
+    if (friends.length === 0) return
     const validIds = new Set(friends.map(f => f.id))
     setOpenTabIds(prev => prev.filter(id => validIds.has(id)))
     setActiveTabId(prev => (prev && validIds.has(prev) ? prev : null))

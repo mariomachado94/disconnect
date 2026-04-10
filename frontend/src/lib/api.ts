@@ -67,6 +67,9 @@ export const messagesApi = {
 
   markRead: (friendId: string, token: string) =>
     request(`/api/messages/read/${friendId}`, { method: 'POST' }, token),
+
+  getUnreadSenders: (token: string) =>
+    request<{ senderIds: string[] }>('/api/messages/unread-senders', {}, token).then(r => r.senderIds),
 }
 
 // Profile
