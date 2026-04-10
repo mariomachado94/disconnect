@@ -173,7 +173,7 @@ export class WebSocketService {
         if (graceTimer) {
           clearTimeout(graceTimer);
           this.disconnectGraceTimers.delete(payload.userId);
-          debugWs(`[connect] ${this.tag(payload.userId)} — cancelled grace timer (reconnected before 1s)`);
+          debugWs(`[connect] ${this.tag(payload.userId)} — cancelled grace timer (reconnected before 5s)`);
         }
 
         // If the socket closed during the async gap (e.g. StrictMode cleanup
@@ -417,7 +417,7 @@ export class WebSocketService {
     }
 
     // Last connection closed
-    debugWs(`[disconnect] ${this.tag(userId)} — last tab closed. Starting 1s grace timer. notifiedOnline=${this.notifiedOnline.has(userId)}`);
+    debugWs(`[disconnect] ${this.tag(userId)} — last tab closed. Starting 5s grace timer. notifiedOnline=${this.notifiedOnline.has(userId)}`);
 
     // Cancel any pending ONLINE notification — user disconnected before
     // the stabilization delay fired.
@@ -428,13 +428,15 @@ export class WebSocketService {
       debugWs(`[disconnect] ${this.tag(userId)} — cancelled pending onlineNotify timer`);
     }
 
-    // Don't mark offline immediately — give a 1s grace period for page
+    // Don't mark offline immediately — give a 5s grace period for page
     // refreshes and brief network blips. If the user reconnects within
     // this window, friends never see an offline/online flap.
+    // 5s covers high-latency connections (e.g. Southeast Asia → North America)
+    // where page reload + WS handshake can exceed 1s.
     const graceTimer = setTimeout(async () => {
       this.disconnectGraceTimers.delete(userId);
       const connCount = this.connectionCount(userId);
-      debugWs(`[graceTimer] ${this.tag(userId)} — 1s grace expired. connCount=${connCount}`);
+      debugWs(`[graceTimer] ${this.tag(userId)} — 5s grace expired. connCount=${connCount}`);
       // Only go offline if they haven't reconnected
       if (connCount === 0) {
         this.notifiedOnline.delete(userId);
@@ -444,7 +446,7 @@ export class WebSocketService {
       } else {
         debugWs(`[graceTimer] ${this.tag(userId)} — reconnected during grace, skipping offline`);
       }
-    }, 1_000);
+    }, 5_000);
     this.disconnectGraceTimers.set(userId, graceTimer);
 
     // Start a 90s timer — if the user doesn't reconnect, blocklist their token.
