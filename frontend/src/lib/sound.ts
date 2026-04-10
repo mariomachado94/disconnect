@@ -1,7 +1,31 @@
+// Shared AudioContext — created once on first user gesture so Safari allows audio playback.
+// Safari blocks AudioContext created outside a direct user gesture handler; reusing one that
+// was unlocked by a prior gesture works fine. Chrome/Firefox are more lenient but also benefit.
+let sharedCtx: AudioContext | null = null
+
+function getCtx(): AudioContext {
+  if (!sharedCtx || sharedCtx.state === 'closed') {
+    sharedCtx = new AudioContext()
+  }
+  if (sharedCtx.state === 'suspended') {
+    sharedCtx.resume()
+  }
+  return sharedCtx
+}
+
+// Call this once on any early user interaction (click, keydown, etc.) to unlock audio in Safari.
+export function unlockAudio() {
+  try {
+    getCtx()
+  } catch {
+    // Ignore — will retry on next call
+  }
+}
+
 // Warm two-tone chime for friend coming online — lower and softer than the message chirp
 export function playFriendOnline() {
   try {
-    const ctx = new AudioContext()
+    const ctx = getCtx()
 
     // A warm major third: C5 → E5
     const osc1 = ctx.createOscillator()
@@ -33,7 +57,7 @@ export function playFriendOnline() {
 // Sharp two-tone chirp for incoming messages
 export function playNotification() {
   try {
-    const ctx = new AudioContext()
+    const ctx = getCtx()
 
     // First note
     const osc1 = ctx.createOscillator()

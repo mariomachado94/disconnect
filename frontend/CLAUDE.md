@@ -74,6 +74,8 @@ WSContext handles `{ type: 'force_logout' }` by calling `logout()` from AuthCont
 
 `lib/sound.ts` generates sounds via Web Audio API (no audio assets). `playNotification()` is a sharp sine chirp (660 → 880 Hz) for messages. `playFriendOnline()` is a softer triangle-wave chime (C5 → E5, 523 → 659 Hz) for friends coming online.
 
+**Safari AudioContext gotcha:** Safari blocks `AudioContext` creation/resume unless it happens inside a direct user gesture handler. Creating a new `AudioContext()` per-sound inside a WS message callback (async) silently fails in Safari — Chrome and Firefox are more lenient. Fix: a single shared `AudioContext` (`sharedCtx` in `sound.ts`) is created and unlocked once on the first user gesture via `unlockAudio()` (called from `main.tsx` on `click`/`keydown`). All subsequent programmatic sound calls reuse that already-unlocked context.
+
 ## Toast Notifications
 
 `ToastContainer` renders a fixed-position stack in the top-right corner (`right-14` / 56px margin to always clear the 40px TabStrip). Toasts slide in from the right, fade out after 3.5s, and are removed from DOM at 3.8s. Two kinds: `friend-online` (green dot + "is now online") and `new-message` (blue dot + "New message from"). Toast state and the `addToast` helper live in `Main.tsx`. The `toastIdCounter` is a module-level variable (not state) to avoid stale closures in setTimeout callbacks.
