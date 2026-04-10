@@ -13,6 +13,7 @@ interface Props {
   selectedFriendId: string | null
   onSelectFriend: (friend: Friend) => void
   fullscreen?: boolean
+  mobileCompact?: boolean
 }
 
 function statusDot(status: Friend['status']) {
@@ -39,7 +40,7 @@ function ContactItem({ friend, isSelected, onSelect }: ContactItemProps) {
   )
 }
 
-export default function ContactList({ selectedFriendId, onSelectFriend, fullscreen }: Props) {
+export default function ContactList({ selectedFriendId, onSelectFriend, fullscreen, mobileCompact }: Props) {
   const { token, user, logout } = useAuth()
   const { friends, setFriends, selfStatus, pendingCount, setPendingCount, pendingSeen, setPendingSeen } = useWS()
   const [onlineExpanded, setOnlineExpanded] = useState(true)
@@ -48,6 +49,7 @@ export default function ContactList({ selectedFriendId, onSelectFriend, fullscre
   const [showPending, setShowPending] = useState(false)
   const [showAvatarUpload, setShowAvatarUpload] = useState(false)
   const [showProfileSettings, setShowProfileSettings] = useState(false)
+  const [showMobileMenu, setShowMobileMenu] = useState(false)
 
   useEffect(() => {
     if (!token) return
@@ -59,10 +61,34 @@ export default function ContactList({ selectedFriendId, onSelectFriend, fullscre
   const offline = friends.filter(f => f.status === 'offline')
 
   return (
-    <div className={`flex flex-col h-full bg-gray-50 border-r border-gray-200 ${fullscreen ? 'flex-1' : 'w-52 shrink-0'}`}>
+    <div className={`relative flex flex-col bg-gray-50 border-r border-gray-200 ${
+      mobileCompact
+        ? 'h-48 sm:h-full shrink-0 sm:w-52 border-b sm:border-b-0'
+        : fullscreen
+          ? 'flex-1'
+          : 'w-52 shrink-0'
+    }`}>
       {/* Header */}
       <div className="px-3 py-2 border-b border-gray-200 bg-white flex items-center gap-2">
-        <button onClick={() => setShowAvatarUpload(true)} className={`rounded ring-2 cursor-pointer ${selfStatus === 'online' ? 'ring-green-500' : 'ring-yellow-400'}`} title="Change avatar">
+        {/* Hamburger — mobile only */}
+        <div className="relative sm:hidden shrink-0">
+          <button
+            onClick={() => setShowMobileMenu(m => !m)}
+            className="p-1 -ml-1 text-gray-500 hover:text-gray-700 cursor-pointer"
+            aria-label="Menu"
+          >
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <line x1="2" y1="4" x2="16" y2="4" />
+              <line x1="2" y1="9" x2="16" y2="9" />
+              <line x1="2" y1="14" x2="16" y2="14" />
+            </svg>
+          </button>
+          {pendingCount > 0 && (
+            <span className={`absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full pointer-events-none ${pendingSeen ? 'bg-gray-400' : 'bg-red-500'}`} />
+          )}
+        </div>
+
+        <button onClick={() => setShowAvatarUpload(true)} className={`rounded ring-2 cursor-pointer shrink-0 ${selfStatus === 'online' ? 'ring-green-500' : 'ring-yellow-400'}`} title="Change avatar">
           <Avatar displayName={user?.displayName ?? ''} avatarUrl={user?.avatarUrl ?? null} size="sm" />
         </button>
         <button onClick={() => setShowProfileSettings(true)} className="flex-1 min-w-0 text-left cursor-pointer hover:bg-gray-100 rounded px-1 -mx-1">
@@ -70,6 +96,43 @@ export default function ContactList({ selectedFriendId, onSelectFriend, fullscre
           <p className="text-xs text-gray-400 truncate">{user?.email}</p>
         </button>
       </div>
+
+      {/* Mobile menu drawer */}
+      {showMobileMenu && (
+        <>
+          <div
+            className="fixed inset-0 z-10 sm:hidden"
+            onClick={() => setShowMobileMenu(false)}
+          />
+          <div className="absolute top-12 left-0 right-0 z-20 bg-white border-b border-gray-200 shadow-lg sm:hidden">
+            <div className="p-2 space-y-1">
+              <button
+                onClick={() => { setShowPending(true); setPendingSeen(true); setShowMobileMenu(false) }}
+                className="w-full flex items-center px-2 py-2 text-sm text-gray-600 hover:bg-gray-100 cursor-pointer rounded"
+              >
+                <span>Friend Requests</span>
+                {pendingCount > 0 && (
+                  <span className={`ml-1.5 rounded-full px-1.5 py-0.5 text-[10px] text-white ${pendingSeen ? 'bg-gray-400' : 'bg-red-500'}`}>
+                    {pendingCount}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={() => { setShowAddFriend(true); setShowMobileMenu(false) }}
+                className="w-full px-2 py-2 text-sm text-blue-600 hover:bg-blue-50 text-left cursor-pointer rounded"
+              >
+                + Add Friend
+              </button>
+              <button
+                onClick={() => { logout(); setShowMobileMenu(false) }}
+                className="w-full px-2 py-2 text-sm text-gray-400 hover:text-gray-600 text-left cursor-pointer rounded"
+              >
+                Sign out
+              </button>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Contact groups */}
       <div className="flex-1 overflow-y-auto py-1">
@@ -98,8 +161,8 @@ export default function ContactList({ selectedFriendId, onSelectFriend, fullscre
         ))}
       </div>
 
-      {/* Footer actions */}
-      <div className="border-t border-gray-200 p-2 space-y-1">
+      {/* Footer actions — desktop only; mobile uses the hamburger drawer */}
+      <div className="hidden sm:block border-t border-gray-200 p-2 space-y-1">
         <button
           onClick={() => { setShowPending(true); setPendingSeen(true) }}
           className="w-full flex items-center px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 cursor-pointer"

@@ -168,7 +168,7 @@ export default function ChatWindow({ friend, onMinimize, onClose }: Props) {
       </div>
 
       {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-2 bg-white">
+      <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto px-4 py-3 space-y-2 bg-white">
         {!historyLoaded ? null : conversation.length === 0 ? (
           <p className="text-xs text-gray-400 text-center mt-8">
             {isOffline

@@ -107,11 +107,12 @@ export default function Main() {
   }
 
   return (
-    <div className="flex h-screen bg-white overflow-hidden">
+    <div className={`flex h-[100dvh] bg-white overflow-hidden ${activeFriend ? 'flex-col sm:flex-row' : 'flex-row'}`}>
       <ContactList
         selectedFriendId={activeTabId}
         onSelectFriend={handleSelectFriend}
         fullscreen={activeTabId === null}
+        mobileCompact={!!activeFriend}
       />
 
       <TabStrip
@@ -119,10 +120,11 @@ export default function Main() {
         activeId={activeTabId}
         unreadIds={unreadIds}
         onSwitch={handleSwitchTab}
+        horizontal={!!activeFriend}
       />
 
       {activeFriend && (
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 min-h-0 flex flex-col">
           <ChatWindow
             key={activeFriend.id}
             friend={activeFriend}
