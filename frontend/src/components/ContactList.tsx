@@ -25,14 +25,19 @@ function statusDot(status: Friend['status']) {
 interface ContactItemProps {
   friend: Friend
   isSelected: boolean
+  isFocused: boolean
+  onFocus: (friend: Friend) => void
   onSelect: (friend: Friend) => void
 }
 
-function ContactItem({ friend, isSelected, onSelect }: ContactItemProps) {
+function ContactItem({ friend, isSelected, isFocused, onFocus, onSelect }: ContactItemProps) {
   return (
     <button
+      onClick={() => onFocus(friend)}
       onDoubleClick={() => onSelect(friend)}
-      className={`w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-blue-50 cursor-pointer ${isSelected ? 'bg-blue-100' : ''}`}
+      className={`w-full flex items-center gap-2 px-3 py-1.5 text-left cursor-pointer ${
+        isSelected ? 'bg-blue-100' : isFocused ? 'bg-blue-50' : 'hover:bg-blue-50'
+      }`}
     >
       {statusDot(friend.status)}
       <span className="text-sm text-gray-800 truncate">{friend.displayName}</span>
@@ -45,6 +50,7 @@ export default function ContactList({ selectedFriendId, onSelectFriend, fullscre
   const { friends, setFriends, selfStatus, pendingCount, setPendingCount, pendingSeen, setPendingSeen } = useWS()
   const [onlineExpanded, setOnlineExpanded] = useState(true)
   const [offlineExpanded, setOfflineExpanded] = useState(false)
+  const [focusedId, setFocusedId] = useState<string | null>(null)
   const [showAddFriend, setShowAddFriend] = useState(false)
   const [showPending, setShowPending] = useState(false)
   const [showAvatarUpload, setShowAvatarUpload] = useState(false)
@@ -145,7 +151,7 @@ export default function ContactList({ selectedFriendId, onSelectFriend, fullscre
           <span>Online ({online.length})</span>
         </button>
         {onlineExpanded && online.map(f => (
-          <ContactItem key={f.id} friend={f} isSelected={f.id === selectedFriendId} onSelect={onSelectFriend} />
+          <ContactItem key={f.id} friend={f} isSelected={f.id === selectedFriendId} isFocused={f.id === focusedId} onFocus={f => setFocusedId(f.id)} onSelect={f => { setFocusedId(null); onSelectFriend(f) }} />
         ))}
 
         {/* Offline */}
@@ -157,7 +163,7 @@ export default function ContactList({ selectedFriendId, onSelectFriend, fullscre
           <span>Offline ({offline.length})</span>
         </button>
         {offlineExpanded && offline.map(f => (
-          <ContactItem key={f.id} friend={f} isSelected={f.id === selectedFriendId} onSelect={onSelectFriend} />
+          <ContactItem key={f.id} friend={f} isSelected={f.id === selectedFriendId} isFocused={f.id === focusedId} onFocus={f => setFocusedId(f.id)} onSelect={f => { setFocusedId(null); onSelectFriend(f) }} />
         ))}
       </div>
 
